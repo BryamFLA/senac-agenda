@@ -14,7 +14,14 @@ export interface Registro {
   hora_fim: string | null;
   observacao: string | null;
   gcal_event_id: string | null;
-  compromisso: { nome: string; subtitulo: string | null };
+  compromisso: { nome: string; subtitulo: string | null; tipo: string };
+}
+
+/** Tipos que não vão para o Google (decisão do Bryam): ocupam os 3 turnos e só poluiriam a agenda. */
+const FORA_DO_ESPELHO = ['feriado', 'ferias'];
+
+export function noEspelho(r: Registro): boolean {
+  return !FORA_DO_ESPELHO.includes(r.compromisso.tipo);
 }
 
 export type Momento = { dateTime: string; timeZone: string } | { date: string };

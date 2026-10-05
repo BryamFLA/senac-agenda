@@ -10,7 +10,7 @@ const reg = (n: number, extra: Partial<Registro> = {}): Registro => ({
   hora_fim: '12:00:00',
   observacao: null,
   gcal_event_id: null,
-  compromisso: { nome: 'Assistente de TI', subtitulo: '202600012' },
+  compromisso: { nome: 'Assistente de TI', subtitulo: '202600012', tipo: 'aula' },
   ...extra,
 });
 
@@ -65,6 +65,15 @@ Deno.test('cor ausente ou diferente vai para atualizar', () => {
   const r = reg(1);
   const atual = { ...comoGoogle(eventoPara(r)), colorId: undefined };
   assertEquals(planejar([r], [atual]).atualizar.length, 1);
+});
+
+Deno.test('feriado e férias não são criados, e o evento que já existir é apagado', () => {
+  const feriado = reg(1, { hora_inicio: null, hora_fim: null, compromisso: { nome: 'Feriado', subtitulo: null, tipo: 'feriado' } });
+  const ferias = reg(2, { hora_inicio: null, hora_fim: null, compromisso: { nome: 'Férias', subtitulo: null, tipo: 'ferias' } });
+  const plano = planejar([feriado, ferias], [comoGoogle(eventoPara(ferias))]);
+  assertEquals(plano.criar, []);
+  assertEquals(plano.atualizar, []);
+  assertEquals(plano.apagar, ['00000000000000000000000000000002']);
 });
 
 Deno.test('evento sem registro correspondente vai para apagar', () => {

@@ -1,5 +1,5 @@
 import { assertEquals } from '@std/assert';
-import { eventIdPara, eventoPara, hojeEmSaoPaulo, RODAPE, type Registro } from './evento.ts';
+import { eventIdPara, eventoPara, hojeEmSaoPaulo, noEspelho, RODAPE, type Registro } from './evento.ts';
 
 const base: Registro = {
   id: '3f2a9c1e-5b7d-4e8f-9a0b-1c2d3e4f5a6b',
@@ -9,7 +9,7 @@ const base: Registro = {
   hora_fim: '12:00:00',
   observacao: null,
   gcal_event_id: null,
-  compromisso: { nome: 'Assistente de TI', subtitulo: '202600012' },
+  compromisso: { nome: 'Assistente de TI', subtitulo: '202600012', tipo: 'aula' },
 };
 
 Deno.test('eventIdPara remove hífens e usa só caracteres aceitos pelo Google', () => {
@@ -55,8 +55,17 @@ Deno.test('observação entra entre o subtítulo e o rodapé', () => {
 });
 
 Deno.test('sem subtítulo nem observação fica só o rodapé', () => {
-  const ev = eventoPara({ ...base, observacao: '  ', compromisso: { nome: 'Feriado', subtitulo: null } });
+  const ev = eventoPara({ ...base, observacao: '  ', compromisso: { nome: 'Reunião', subtitulo: null, tipo: 'evento' } });
   assertEquals(ev.description, RODAPE);
+});
+
+Deno.test('feriado e férias ficam fora do espelho; o resto entra', () => {
+  const comTipo = (tipo: string) => ({ ...base, compromisso: { ...base.compromisso, tipo } });
+  assertEquals(noEspelho(comTipo('feriado')), false);
+  assertEquals(noEspelho(comTipo('ferias')), false);
+  assertEquals(noEspelho(comTipo('aula')), true);
+  assertEquals(noEspelho(comTipo('evento')), true);
+  assertEquals(noEspelho(comTipo('folga')), true);
 });
 
 Deno.test('hojeEmSaoPaulo usa o fuso de Brasília', () => {

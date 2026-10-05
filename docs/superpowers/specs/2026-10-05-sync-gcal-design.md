@@ -15,7 +15,8 @@ do Bryam (`bryamafl@gmail.com`). O banco é a fonte da verdade; o Google é espe
 | Rede de segurança | Conferência diária às 03:00 (Brasília) via `pg_cron`. Sem fila |
 | Estratégia de sincronização | O disparo envia só o `id`; a função relê o registro e faz upsert idempotente com ID de evento determinístico |
 | Período | Disparo em tempo real: qualquer data. Conferência: só do dia corrente em diante; o passado no Google não é tocado |
-| Carga inicial | É a primeira conferência (≈125 registros de 05/10/2026 em diante) |
+| Carga inicial | É a primeira conferência (77 registros de 05/10/2026 em diante, sem feriados e férias) |
+| Fora do espelho | Compromissos de tipo `feriado` e `ferias` não vão para o Google (ocupam os 3 turnos e poluiriam a agenda); se um registro virar feriado/férias, o evento é apagado |
 | Cor | Todos os eventos vermelhos (`colorId: "11"`, Tomate) — no Google a cor separa entidades, não eventos |
 | Lembretes | `useDefault`: os padrões configurados na própria agenda "SENAC" |
 | Eventos manuais do SENAC na agenda principal | Encerrar as ocorrências futuras depois que o espelho for validado, com confirmação do Bryam série a série |

@@ -1,4 +1,4 @@
-import { type Evento, eventoPara, type Registro } from './evento.ts';
+import { type Evento, eventoPara, noEspelho, type Registro } from './evento.ts';
 
 /** Evento como vem da listagem do Google (só os campos comparados). */
 export interface EventoGoogle {
@@ -29,13 +29,16 @@ function mesmoConteudo(esperado: Evento, atual: EventoGoogle): boolean {
     && chaveMomento(esperado.end) === chaveMomento(atual.end);
 }
 
-/** Compara o banco (fonte da verdade) com o Google e diz o que criar, atualizar e apagar. */
+/**
+ * Compara o banco (fonte da verdade) com o Google e diz o que criar, atualizar e apagar.
+ * Registros fora do espelho (feriado, férias) são ignorados — e o evento deles, se existir, é apagado.
+ */
 export function planejar(registros: Registro[], eventos: EventoGoogle[]): Plano {
   const atuais = new Map(eventos.map((e) => [e.id, e]));
   const esperados = new Set<string>();
   const plano: Plano = { criar: [], atualizar: [], apagar: [] };
 
-  for (const r of registros) {
+  for (const r of registros.filter(noEspelho)) {
     const ev = eventoPara(r);
     esperados.add(ev.id);
     const atual = atuais.get(ev.id);

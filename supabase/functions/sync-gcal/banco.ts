@@ -4,7 +4,7 @@ import type { Registro } from './evento.ts';
 export type Db = SupabaseClient;
 
 const CAMPOS =
-  'id,data,turno,hora_inicio,hora_fim,observacao,gcal_event_id,compromisso:compromissos(nome,subtitulo)';
+  'id,data,turno,hora_inicio,hora_fim,observacao,gcal_event_id,compromisso:compromissos(nome,subtitulo,tipo)';
 
 /** Cliente com a chave de serviço (ignora o RLS) — variáveis injetadas pelo Supabase na Edge Function. */
 export function clienteBanco(): Db {
@@ -26,8 +26,8 @@ export async function buscarDesde(db: Db, dia: string): Promise<Registro[]> {
   return (data ?? []) as unknown as Registro[];
 }
 
-/** Grava o ID do evento. Os triggers de histórico e de sincronização ignoram essa mudança. */
-export async function gravarEventId(db: Db, id: string, eventId: string): Promise<void> {
+/** Grava (ou limpa) o ID do evento. Os triggers de histórico e de sincronização ignoram essa mudança. */
+export async function gravarEventId(db: Db, id: string, eventId: string | null): Promise<void> {
   const { error } = await db.from('agenda').update({ gcal_event_id: eventId }).eq('id', id);
   if (error) throw new Error(`gravar gcal_event_id ${id}: ${error.message}`);
 }
