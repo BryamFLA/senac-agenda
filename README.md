@@ -5,7 +5,7 @@ Agenda do instrutor Bryam (SENAC Francisco Beltrão), editada pelas coordenadora
 
 ## Stack
 - **Supabase** (`senac-agenda`, sa-east-1): Postgres + Auth. Acesso só para e-mails na tabela `editores` (RLS).
-- **Next.js** exportado como site estático (`out/`) → **Firebase Hosting** (projeto `senac-gestao`, site `senac-agenda`).
+- **Next.js** exportado como site estático (`out/`) → **Firebase Hosting** (site padrão do projeto `senac-gestao`).
 - **GitHub Actions**: PR → preview; push na `main` → produção.
 
 ## Banco
@@ -26,8 +26,8 @@ npm run dev
 ```
 
 ## Configuração única (manual)
-1. **Firebase**: `firebase hosting:sites:create senac-agenda --project senac-gestao`
-2. **Domínio**: Firebase Console → Hosting → site `senac-agenda` → *Add custom domain* → `agenda.bryam.com.br` → criar no DNS os registros que o Firebase mostrar.
+1. **Firebase**: `firebase login` e `npm run build && firebase deploy --only hosting`
+2. **Domínio**: Firebase Console → Hosting → *Add custom domain* → `agenda.bryam.com.br` → criar no DNS os registros que o Firebase mostrar.
 3. **GitHub** (Settings → Secrets and variables → Actions):
    - Secret `FIREBASE_SERVICE_ACCOUNT_SENAC_GESTAO` (gerado por `firebase init hosting:github` ou JSON de conta de serviço com papel *Firebase Hosting Admin*)
 4. **Supabase Auth**: Site URL = `https://agenda.bryam.com.br`; desligar *Allow new users to sign up*; convidar as coordenadoras em *Users → Invite* e incluir o e-mail delas em `editores`.

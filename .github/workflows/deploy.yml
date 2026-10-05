@@ -30,7 +30,6 @@ jobs:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SENAC_GESTAO }}
           projectId: senac-gestao
-          target: agenda
           expires: 7d
       # main: publica em produção (agenda.bryam.com.br)
       - if: github.event_name == 'push'
@@ -39,5 +38,4 @@ jobs:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SENAC_GESTAO }}
           projectId: senac-gestao
-          target: agenda
           channelId: live

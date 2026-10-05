@@ -1,8 +1,5 @@
 {
-  "projects": { "default": "senac-gestao" },
-  "targets": {
-    "senac-gestao": {
-      "hosting": { "agenda": ["senac-agenda"] }
-    }
+  "projects": {
+    "default": "senac-gestao"
   }
 }
