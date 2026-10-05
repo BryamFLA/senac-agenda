@@ -20,6 +20,7 @@ Contexto para agentes (Claude Code) trabalharem neste repositório. Leia inteiro
 | Domínio | `agenda.bryam.com.br` (custom domain no Firebase; DNS controlado pelo Bryam) |
 | Repositório | `github.com/BryamFLA/senac-agenda` (privado), branch `main` |
 | CI/CD | `.github/workflows/deploy.yml`: job `verificar` (lint + build) → PR: `preview` (canal temporário, 7 dias) · push na `main`: `producao` (canal `live`) |
+| Espelho Google | Edge Function `sync-gcal` → agenda "SENAC" de `bryamafl@gmail.com` (`3765be6c…@group.calendar.google.com`), conta de serviço `agenda-sync@senac-gestao.iam.gserviceaccount.com` |
 
 Plano free do Supabase pode pausar o projeto após dias sem uso — se o site parar de carregar dados, verificar no painel.
 
@@ -29,6 +30,8 @@ app/            layout.tsx (fonte Inter, metadados), page.tsx (sessão, acesso, 
 components/     Login.tsx, NovaSenha.tsx (recuperação de senha), Grade.tsx (grade semanal), Editor.tsx (modal de edição/cadastro)
 lib/            supabase.ts (cliente), types.ts (tipos, TURNOS, CORES, horarioPara), datas.ts (datas locais 'YYYY-MM-DD')
 supabase/migrations/   SQL versionado — nomes batem com as versões já aplicadas no banco remoto
+supabase/functions/sync-gcal/   espelho no Google Calendar (Deno). Testes: cd lá e `npx -y deno@2.9.6 test`
+docs/superpowers/      desenho (specs/) e plano (plans/) do espelho no Google
 scripts/import_excel.py  importação única da aba 2026 da planilha (já executada; não rodar de novo)
 ```
 
@@ -58,7 +61,7 @@ scripts/import_excel.py  importação única da aba 2026 da planilha (já execut
   (Evento, Folga, Palestra, Planejamento, Reunião, Viagem, Workshop) foram desativados: eventos são cadastrados com nome próprio quando surgem.
 - **Sem categorias na tela**: lista única de compromissos, cada um com sua cor. Novo compromisso = nome + turma (opcional) + cor;
   `tipo` é inferido (`aula` se tiver turma, senão `outro`).
-- **Google Calendar é espelho**: nunca editar lá; a sincronização sobrescreve.
+- **Google Calendar é espelho**: nunca editar lá; a sincronização sobrescreve (ver seção "Espelho no Google Calendar").
 - Datas sempre como string local `YYYY-MM-DD` (nada de `toISOString()` — fuso `America/Sao_Paulo`).
 
 ## Interface
@@ -93,24 +96,31 @@ npm run build      # gera out/
 - [x] Front: login, recuperação de senha, grade, editor, cadastro com cor
 - [x] Usuários: Bryam + coordenadoras criados e liberados em `editores`
 - [x] Publicado no Firebase com `agenda.bryam.com.br` apontado
-- [ ] Supabase Auth → URL Configuration: Site URL `https://agenda.bryam.com.br`; Redirect URLs `https://agenda.bryam.com.br/**` e `http://localhost:3000/**`
-- [ ] Supabase Auth → desligar "Allow new users to sign up"
-- [ ] Secret do Firebase no GitHub (CI)
+- [x] Supabase Auth: Site URL `https://agenda.bryam.com.br`; Redirect URLs `https://agenda.bryam.com.br/**` e `http://localhost:3000/**`; cadastro aberto desligado (feito pelo Bryam no painel em 05/10)
+- [x] Secret do Firebase no GitHub — esteira de deploy funcionando
+- [x] Espelho no Google Calendar (`sync-gcal` + conferência diária), em produção desde 05/10/2026
 - Recuperação de senha: o e-mail padrão do Supabase (sem SMTP próprio) só entrega para membros da organização e tem
   limite baixo — provavelmente não chega às coordenadoras. Decisão: ignorar por agora; o Bryam redefine senhas pelo painel.
 
+## Espelho no Google Calendar (em produção)
+- Trigger `agenda_sync_gcal` (pg_net) envia `{id}` a cada INSERT/UPDATE/DELETE em `agenda`; a função relê o registro e faz
+  upsert. ID do evento = `agenda.id` sem hífens. Eventos vermelhos (`colorId 11`), lembretes padrão da agenda SENAC.
+- **Feriado e férias (tipos `feriado`/`ferias`) não vão para o Google** (decisão do Bryam); se uma célula vira feriado, o evento é apagado.
+- Conferência diária `sync-gcal-conferir` (pg_cron, 06:00 UTC = 03:00 BRT): do dia corrente em diante, cria/atualiza/apaga
+  para o Google bater com o banco. O passado no Google não é tocado. Renomear compromisso só reflete na conferência.
+- Rodar à mão: POST em `https://lgdbckmppeaddnhecwix.supabase.co/functions/v1/sync-gcal` com header `x-sync-secret` e corpo
+  `{"conferir":true,"simular":true}` (mostra o plano, não grava) ou `{"conferir":true}` (aplica, em segundo plano).
+  Pelo banco: `select private.chamar_sync_gcal('{"conferir": true}'::jsonb);`. O segredo está no Vault (`sync_gcal_secret`).
+- Segredos da função (Supabase → Edge Functions → Secrets): `GOOGLE_SERVICE_ACCOUNT_JSON`, `GCAL_CALENDAR_ID`, `SYNC_SECRET`
+  (igual ao do Vault).
+- Deploy da função: MCP `deploy_edge_function` com `verify_jwt: false` **e `import_map_path: "deno.json"`** (sem isso o
+  redeploy falha procurando o import map da versão anterior). Supabase CLI não está instalado.
+- `supabase/functions` fica fora do `tsconfig.json` do Next (é Deno). `turnos.ts` copia o fim dos turnos de `lib/types.ts`.
+- Falhas de disparo ficam no log da função (Supabase → Edge Functions → sync-gcal → Logs); a conferência corrige.
+
 ## Próximas etapas (em ordem)
-1. **Sincronização com o Google Calendar** — Edge Function `sync-gcal` (Deno) disparada por **Database Webhook** em
-   INSERT/UPDATE/DELETE de `agenda`:
-   - autenticação por **conta de serviço** do Google, numa agenda dedicada "SENAC" compartilhada com a conta de serviço
-     (evitar OAuth em modo teste: o refresh token expira em 7 dias);
-   - INSERT/UPDATE → cria/atualiza evento e grava `gcal_event_id`; DELETE → apaga o evento; sem horário → evento de dia inteiro;
-     título = nome do compromisso, descrição = subtítulo/observação; fuso `America/Sao_Paulo`;
-   - credenciais em Supabase Secrets, nunca no repositório.
-2. **Conferência noturna** — `pg_cron` de madrugada comparando banco × Calendar e corrigindo divergências/falhas
-   (decisão do Bryam: webhook + checagem noturna; não usar fila).
-3. Opcional: trocar a cor de compromissos existentes pela tela; desativar "Formação pedagógica" se o Bryam pedir.
-4. Depois (projeto separado): agentes em Python no Mac mini M4 que leem esta agenda —
+1. Opcional: trocar a cor de compromissos existentes pela tela; desativar "Formação pedagógica" se o Bryam pedir.
+2. Depois (projeto separado): agentes em Python no Mac mini M4 que leem esta agenda —
    PTDs semanais (Claude API), slides no Canva, rateio de ponto no Senior (Playwright, com revisão humana antes de enviar).
 
 ## Pendências para confirmar com o Bryam
