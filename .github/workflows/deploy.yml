@@ -4,14 +4,19 @@ on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
+
+# PR: um commit novo cancela o preview anterior.
+# main: deploys entram em fila, nunca publicam fora de ordem.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
-  checks: write
-  pull-requests: write
 
 jobs:
-  hosting:
+  verificar:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,19 +28,51 @@ jobs:
       - run: npm run lint
       # usa as chaves públicas do .env.production (a proteção é o RLS do Supabase)
       - run: npm run build
-      # PR: publica em um canal de preview com link temporário
-      - if: github.event_name == 'pull_request'
-        uses: FirebaseExtended/action-hosting-deploy@v0
+      # o mesmo build verificado é o que vai para o Firebase
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: out/
+          retention-days: 1
+
+  # PR: publica em um canal de preview com link temporário (usa o banco de produção)
+  preview:
+    if: github.event_name == 'pull_request'
+    needs: verificar
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: out
+      - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SENAC_GESTAO }}
           projectId: senac-gestao
           expires: 7d
-      # main: publica em produção (agenda.bryam.com.br)
-      - if: github.event_name == 'push'
-        uses: FirebaseExtended/action-hosting-deploy@v0
+
+  # main: publica em produção (agenda.bryam.com.br)
+  producao:
+    if: github.event_name == 'push'
+    needs: verificar
+    runs-on: ubuntu-latest
+    environment:
+      name: producao
+      url: https://agenda.bryam.com.br
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
         with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          name: site
+          path: out
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SENAC_GESTAO }}
           projectId: senac-gestao
           channelId: live

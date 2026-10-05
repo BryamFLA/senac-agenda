@@ -19,7 +19,7 @@ Contexto para agentes (Claude Code) trabalharem neste repositório. Leia inteiro
 | Hospedagem | Firebase Hosting, projeto **`senac-gestao`**, site padrão (`senac-gestao.web.app`) |
 | Domínio | `agenda.bryam.com.br` (custom domain no Firebase; DNS controlado pelo Bryam) |
 | Repositório | `github.com/BryamFLA/senac-agenda` (privado), branch `main` |
-| CI/CD | `.github/workflows/deploy.yml`: PR → canal de preview; push na `main` → produção |
+| CI/CD | `.github/workflows/deploy.yml`: job `verificar` (lint + build) → PR: `preview` (canal temporário, 7 dias) · push na `main`: `producao` (canal `live`) |
 
 Plano free do Supabase pode pausar o projeto após dias sem uso — se o site parar de carregar dados, verificar no painel.
 
@@ -39,7 +39,8 @@ scripts/import_excel.py  importação única da aba 2026 da planilha (já execut
 - **`agenda`** — um registro por **`(data, turno)`** (constraint única `agenda_um_por_turno`).
   `turno` ∈ `M|T|N`, `compromisso_id`, `hora_inicio`/`hora_fim` (nulos = turno inteiro), `observacao`,
   `gcal_event_id` (técnico, para o espelho no Google), `updated_by`/`updated_at` (preenchidos por trigger).
-- **`editores`** — allowlist de e-mails com acesso (`papel`: `admin` | `coordenacao`). Hoje: Bryam (admin) + 2 coordenadoras.
+- **`editores`** — allowlist de e-mails com acesso (`papel`: `admin` | `coordenacao`). Hoje: Bryam (admin) +
+  coordenadoras Luciane de Mari e Claudia Campioni.
   Para liberar alguém: criar o usuário no Supabase Auth **e** inserir o e-mail (minúsculo) aqui.
 - **`agenda_historico`** — auditoria automática (trigger `agenda_audit`): INSERT/UPDATE/DELETE com antes/depois e autor.
   Ignora updates que só mudam `gcal_event_id`/`updated_*` (para a sincronização não poluir o histórico).
@@ -48,8 +49,7 @@ scripts/import_excel.py  importação única da aba 2026 da planilha (já execut
 - **Dados:** 536 registros de 2026 importados da planilha (conferidos 1:1 por hash). 22 compromissos, 15 ativos.
 
 ### Regras de domínio (não quebrar)
-- **Turnos fixos** (coluna da esquerda da grade): Manhã 08:00–12:00 · Tarde 13:30–17:30 · Noite 19:00–22:00.
-  A manhã 08:00–12:00 foi suposição — confirmar com o Bryam se mexer nisso.
+- **Turnos fixos** (coluna da esquerda da grade): Manhã 08:00–12:00 · Tarde 13:30–17:30 · Noite 19:00–22:00 (confirmados pelo Bryam).
 - **Horário gravado** = `horarioPara(compromisso, turno)` em `lib/types.ts`: usa o horário próprio do compromisso se ele cair
   naquele turno (ex.: Técnico IA 12:15–17:15), senão o do turno. Tipos `feriado`, `ferias`, `folga` → sem horário.
   Ao editar a mesma célula sem trocar o compromisso, o horário existente é mantido.
@@ -82,6 +82,9 @@ npm run build      # gera out/
 - Manual: `npm run build` → `firebase deploy --only hosting` (projeto padrão `senac-gestao` no `.firebaserc`).
 - Automático: requer o secret `FIREBASE_SERVICE_ACCOUNT_SENAC_GESTAO` no GitHub (gerado por `firebase init hosting:github`;
   apagar os workflows que esse comando cria e manter só `deploy.yml`).
+- O build é feito uma vez no job `verificar` e o mesmo `out/` (artefato) é publicado — o que passou no lint é o que vai ao ar.
+- **Previews de PR usam o banco de produção**: editar dados num preview altera a agenda real.
+- Escopo decidido: a esteira cobre só o front. Migrações do Supabase continuam manuais; `main` sem proteção de branch.
 - **Migrações:** já aplicadas no remoto. Arquivos locais têm as mesmas versões do remoto. Antes do primeiro
   `supabase db push`, rodar `supabase link --project-ref lgdbckmppeaddnhecwix` e `supabase migration list` para confirmar que está tudo em sincronia.
 
@@ -89,10 +92,12 @@ npm run build      # gera out/
 - [x] Banco, RLS, histórico, importação 2026, cores por compromisso
 - [x] Front: login, recuperação de senha, grade, editor, cadastro com cor
 - [x] Usuários: Bryam + coordenadoras criados e liberados em `editores`
-- [ ] Publicar no Firebase e apontar `agenda.bryam.com.br`
+- [x] Publicado no Firebase com `agenda.bryam.com.br` apontado
 - [ ] Supabase Auth → URL Configuration: Site URL `https://agenda.bryam.com.br`; Redirect URLs `https://agenda.bryam.com.br/**` e `http://localhost:3000/**`
 - [ ] Supabase Auth → desligar "Allow new users to sign up"
 - [ ] Secret do Firebase no GitHub (CI)
+- Recuperação de senha: o e-mail padrão do Supabase (sem SMTP próprio) só entrega para membros da organização e tem
+  limite baixo — provavelmente não chega às coordenadoras. Decisão: ignorar por agora; o Bryam redefine senhas pelo painel.
 
 ## Próximas etapas (em ordem)
 1. **Sincronização com o Google Calendar** — Edge Function `sync-gcal` (Deno) disparada por **Database Webhook** em
@@ -109,9 +114,7 @@ npm run build      # gera out/
    PTDs semanais (Claude API), slides no Canva, rateio de ponto no Senior (Playwright, com revisão humana antes de enviar).
 
 ## Pendências para confirmar com o Bryam
-- Horário da manhã (assumido 08:00–12:00).
-- Código `202600015` do Programador Web veio do Notion (na planilha só aparecia "PSG").
-- Nome completo da coordenadora Luciane em `editores`.
+- Nenhuma no momento (horário da manhã, código `202600015` do Programador Web e nome da Luciane confirmados em out/2026).
 
 ## Contexto externo
 - Arquivos do SENAC: `D:\SENAC` (clone do OneDrive institucional; estrutura Curso → Turma → UC).
