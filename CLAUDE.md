@@ -102,7 +102,8 @@ npm run build      # gera out/
 - Recuperação de senha: o e-mail padrão do Supabase (sem SMTP próprio) só entrega para membros da organização e tem
   limite baixo — provavelmente não chega às coordenadoras. Decisão: ignorar por agora; o Bryam redefine senhas pelo painel.
 
-## Espelho no Google Calendar (em produção)
+## Espelho no Google Calendar (PAUSADO desde 06/10/2026 — reestruturação cursos/turmas/UCs)
+- **Pausado:** trigger `agenda_sync_gcal` desligado e job `sync-gcal-conferir` inativo (migração `20261006095826_pausar_sync_gcal`, que traz os comandos para reativar). Os eventos já criados continuam no Google.
 - Trigger `agenda_sync_gcal` (pg_net) envia `{id}` a cada INSERT/UPDATE/DELETE em `agenda`; a função relê o registro e faz
   upsert. ID do evento = `agenda.id` sem hífens. Eventos vermelhos (`colorId 11`), lembretes padrão da agenda SENAC.
 - **Feriado e férias (tipos `feriado`/`ferias`) não vão para o Google** (decisão do Bryam); se uma célula vira feriado, o evento é apagado.
