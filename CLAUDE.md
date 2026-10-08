@@ -2,10 +2,11 @@
 
 Contexto para agentes (Claude Code) trabalharem neste repositório. Leia inteiro antes de mudar algo.
 
-> **Momento do projeto (out/2026):** o código no ar é a **v0** (agenda de um único instrutor, o Bryam).
-> Estamos construindo a **v1**: sistema de distribuição de aulas e controle de carga horária para a unidade inteira,
-> com duas interfaces (TEPTs e Instrutores). A seção "Visão da v1" é o alvo; as seções "Estado atual (v0)" descrevem
-> o que existe hoje e vai ser reestruturado.
+> **Momento do projeto (08/10/2026):** a **v1** (distribuição de aulas e carga horária para a unidade inteira, com
+> interfaces de TEPTs e Instrutores) está **implementada na branch `v1-desenho`**. O **banco de produção já está no modelo
+> da v1** (tabelas novas + dados da v0 importados); as tabelas da v0 continuam lá, intactas. O site em
+> `agenda.bryam.com.br` ainda é a **v0** até o merge na `main` (virada decidida pelo Bryam).
+> Desenho: `docs/superpowers/specs/2026-10-08-v1-design.md`.
 
 ## Quem e para quê
 - **Dono:** Bryam Assolini, instrutor de TI no SENAC Francisco Beltrão (PR), unidade UEPT-16.
@@ -32,7 +33,7 @@ Contexto para agentes (Claude Code) trabalharem neste repositório. Leia inteiro
 - **Fonte dos cursos:** o **plano de curso** (PDF). Por UC: nome, CH, **indicadores**, **conhecimentos**, **habilidades**
   e **atitudes e valores**.
 
-## Visão da v1 (alvo)
+## Requisitos da v1
 ### Interface das TEPTs
 - Tela de agenda com **filtro por instrutor ou por turma**.
 - Lançamento direto na agenda:
@@ -110,41 +111,67 @@ Padrão nacional do Senac (mesma estrutura em todos os cursos). Exemplo analisad
 | Repositório | `github.com/BryamFLA/senac-agenda` (privado), branch `main` |
 | CI/CD | `.github/workflows/deploy.yml`: job `verificar` (lint + build) → PR: `preview` (canal temporário, 7 dias) · push na `main`: `producao` (canal `live`) |
 | Acesso dos agentes | Supabase, Firebase, GitHub etc. via MCP. Supabase CLI **não** instalado |
+| Edge Functions (v1) | `usuarios` (cria acesso / troca senha, service role) e `ler-plano` (Claude API `claude-opus-5-5`, saída estruturada, `fallbacks: "default"`). Ambas `verify_jwt: true` e conferem se quem chama é gestor |
+| Segredo da IA | `ANTHROPIC_API_KEY` nas secrets das Edge Functions (Supabase → Edge Functions → Secrets) — **o Bryam cadastra** |
 | Espelho Google (v0, pausado) | Edge Function `sync-gcal` → agenda "SENAC" de `bryamafl@gmail.com`, conta de serviço `agenda-sync@senac-gestao.iam.gserviceaccount.com` |
 
 Plano free do Supabase pode pausar o projeto após dias sem uso — se o site parar de carregar dados, verificar no painel.
 
-## Estrutura (v0)
+## Estrutura (v1)
 ```
-app/            layout.tsx (fonte Inter, metadados), page.tsx (sessão, acesso, mês, carga), globals.css (todo o estilo)
-components/     Login.tsx, NovaSenha.tsx (recuperação de senha), Grade.tsx (grade semanal), Editor.tsx (modal de edição/cadastro)
-lib/            supabase.ts (cliente), types.ts (tipos, TURNOS, CORES, horarioPara), datas.ts (datas locais 'YYYY-MM-DD')
-supabase/migrations/   SQL versionado — nomes batem com as versões já aplicadas no banco remoto
-supabase/functions/sync-gcal/   espelho no Google Calendar (Deno). Testes: cd lá e `npx -y deno@2.9.6 test`
-docs/superpowers/      desenhos (specs/) e planos (plans/) — novas features da v1 seguem o mesmo padrão
-scripts/import_excel.py  importação única da aba 2026 da planilha (já executada; não rodar de novo)
+app/            layout.tsx, page.tsx (sessão, perfil, cadastros, abas por hash #agenda/#painel/#cursos/#turmas/#pessoas), globals.css (todo o estilo)
+components/     Contexto.tsx (cadastros compartilhados), Modal.tsx (+ SeletorCor), Login.tsx, NovaSenha.tsx
+                Agenda.tsx (filtro instrutor|turma, grade, Material/PTD) · Grade.tsx (vários itens por célula)
+                FormItem.tsx (lançar/editar: aula|evento, mini calendário, CH da UC, apagar série) · MiniCalendario.tsx
+                DetalheAula.tsx (visão do instrutor: elementos da UC) · Painel.tsx (andamento, carga, pendências)
+                Cursos.tsx (+ ElementosUC, edição de UC) · ImportarPlano.tsx (PDF → IA → revisão) · Turmas.tsx · Pessoas.tsx
+lib/            supabase.ts, types.ts (tipos, TURNOS, CORES, minutos/fmtMin, mensagemErro), datas.ts,
+                plano.ts (corta o texto do plano em partes — função pura), pdf.ts (pdf.js no navegador)
+supabase/migrations/   SQL versionado — nomes batem com as versões aplicadas no remoto
+supabase/functions/    usuarios/, ler-plano/ (v1) · sync-gcal/ (v0, pausado; testes: cd lá e `npx -y deno@2.9.6 test`)
+scripts/testar_plano.mjs  confere a segmentação contra PDFs reais:
+                          `node --experimental-strip-types scripts/testar_plano.mjs "<plano.pdf>"`
+scripts/import_excel.py   importação única da planilha (v0, já executada; não rodar de novo)
+docs/superpowers/      desenhos (specs/) e planos (plans/)
 ```
 
-## Estado atual do banco (v0, schema `public`)
-- **`compromissos`** — catálogo da lista suspensa: `nome` (único), `subtitulo`, `codigo_turma` (9 dígitos, opcional),
-  `cor` (`#RRGGBB`), `tipo` (uso interno: `aula`, `feriado`, `ferias`, `folga`, `outro`…), `hora_inicio_padrao`/`hora_fim_padrao`, `ativo`.
-  Mistura turmas/UCs e eventos num só catálogo — **é isso que a v1 vai separar** em cursos, UCs, turmas e aulas.
-- **`agenda`** — um registro por **`(data, turno)`** (constraint `agenda_um_por_turno`): só cabe **um instrutor**.
-  `turno` ∈ `M|T|N`, `compromisso_id`, `hora_inicio`/`hora_fim`, `observacao`, `gcal_event_id`, `updated_by`/`updated_at` (trigger).
-- **`editores`** — allowlist de e-mails (`papel`: `admin` | `coordenacao`). Hoje: Bryam (admin) + Luciane de Mari e Claudia Campioni.
-  Para liberar alguém: criar o usuário no Supabase Auth **e** inserir o e-mail (minúsculo) aqui.
-- **`agenda_historico`** — auditoria automática (trigger `agenda_audit`), ignora updates só de `gcal_event_id`/`updated_*`.
-- **Segurança:** RLS em todas as tabelas; `anon` sem permissão. Policies usam `private.is_editor()` (security definer,
-  compara o e-mail do JWT com `editores`). Na v1 isso vira papéis (`admin`, `tept`, `instrutor`) com policies por papel.
-- **Dados:** 536 registros de 2026 do Bryam importados da planilha (conferidos 1:1). 22 compromissos, 15 ativos.
-  **Não perder**: a v1 precisa migrar esse histórico para o modelo novo.
+## Banco (schema `public`)
+### v1 (migrações `20261008172403_v1_schema` e `20261008172438_v1_importar_v0`)
+- **`usuarios`** — `id` = `auth.users.id`, `email`, `nome`, `papel` (`admin` | `tept` | `instrutor`), `leciona` (aparece como
+  instrutor), `cor` (pinta as aulas na agenda da turma), `ativo`. Gestor = admin ou tept. Bryam = admin + leciona.
+  Novo acesso: pela tela Pessoas (Edge Function `usuarios`); só admin cria/edita admin.
+- **`cursos`** (`ch_total`, `hora_aula_min` 60|50, `codigo_dn`, `cbo`, `ativo`) → **`ucs`** (`numero` único no curso, `nome`,
+  `ch`, `tipo` regular|projeto_integrador, `indicadores[]`, `conhecimentos[]`, `habilidades[]`, `atitudes[]`, `integra[]`).
+- **`turmas`** — `curso_id`, `codigo` (9 dígitos, único, opcional), `nome`, `cor`, datas, `ativo`.
+- **`itens`** — cada item da agenda: `tipo` aula|evento, `data`, `hora_inicio`/`hora_fim` (obrigatórios), `turno` (coluna
+  gerada pelo início: <12h M, <18h T, senão N), `periodo` (tsrange gerado), `instrutor_id`, `turma_id`+`uc_id` (aula),
+  `titulo`+`cor`+`trabalho` (evento), `observacao`, `material_ok`, `ptd_ok`, `serie_id` (lançados juntos), `origem` v1|v0.
+- **`historico`** — auditoria de `itens` (trigger `itens_audit`). View **`progresso`** (security_invoker): horas agendadas e
+  realizadas por turma × UC.
+- **Regras no banco:** exclusion constraints `itens_sem_choque_instrutor` / `itens_sem_choque_turma` (btree_gist);
+  trigger `itens_validar` (coerência + choque com mensagem em português); constraint trigger **diferido** `itens_jornada`
+  (10 h/dia e 11 h de interjornada, só itens `trabalho`). Tudo em `private.motivo_bloqueio()` / `private.motivo_jornada()`.
+  `app.ignorar_regras = on` (set_config local) desliga as regras — usado **só** na importação da v0.
+- **RPCs:** `disponibilidade(datas[], ini, fim, instrutor, tipo, turma, uc, trabalho, ignorar)` → motivo por data (gestor);
+  `marcar_item(id, 'material'|'ptd', bool)` (dono da aula ou gestor); `salvar_curso(json)` (curso + UCs numa transação).
+- **RLS:** `private.papel()/e_gestor()/e_usuario()`. Gestor lê/escreve tudo. Instrutor lê os próprios itens + aulas das
+  turmas em que dá aula (`private.minhas_turmas()`), não escreve direto (só via `marcar_item`). Sem cadastro ativo: nada.
+- **Dados da v0:** os 535 registros viraram **eventos do Bryam com `origem = 'v0'`** (selo "v0" no cartão; feriado/férias/
+  folga com `trabalho = false`). A TEPT converte em aula pela edição (Evento → Aula + turma + UC).
 
-## Convenções que continuam valendo
-- **Turnos fixos:** Manhã 08:00–12:00 · Tarde 13:30–17:30 · Noite 19:00–22:00 (confirmados pelo Bryam).
-  Horário da aula = do turno por padrão; pode ser próprio (ex.: Técnico IA 12:15–17:15). Feriado/férias/folga → sem horário.
+### v0 (legado, não usado pela v1)
+`agenda`, `compromissos`, `editores`, `agenda_historico` continuam no banco, intactas (o site da v0 ainda lê delas até o merge).
+Depois da virada podem virar somente leitura; não apagar sem o Bryam pedir.
+
+## Convenções
+- **Turnos:** Manhã 08:00–12:00 · Tarde 13:30–17:30 · Noite 19:00–22:00 (horário padrão; a aula pode ter horário próprio).
+  Evento "dia todo" = 08:00–22:00. Férias/folga/feriado = evento com `trabalho = false` (ocupa, não conta jornada).
 - Datas sempre como string local `YYYY-MM-DD` (nada de `toISOString()` — fuso `America/Sao_Paulo`).
-- **Nunca apagar registro com histórico ligado** — desativar (`ativo = false`).
-- Cor por item (hoje por compromisso), cartão pintado via CSS `--c` + `color-mix`.
+- **Nunca apagar registro com histórico ligado** — desativar (`ativo = false`). FKs bloqueiam apagar UC/turma com aulas.
+- Cartão pintado via CSS `--c` + `color-mix`: na agenda do instrutor, cor da **turma**; na da turma, cor do **instrutor**.
+- Erros do banco chegam à tela por `mensagemErro()` (`lib/types.ts`): as funções levantam mensagens prontas em português.
+- `next.config.mjs` tem `agentRules: false`: o `next dev` 16.3 reescreve o `CLAUDE.md` sem isso.
+- CSS: a classe `.marca` é do logo do topo; os botões Material/PTD usam `.marcacao`.
 - **Interface:** tema **somente claro**, identidade SENAC (Manual da Marca): azul `#004A8D` (Pantone 288 C) e
   laranja `#F7941D` (Pantone 144 C). Azul = ações e títulos; laranja = "hoje"/foco. Fonte Inter, base 16px, visual limpo.
   Grade: semanas empilhadas (SEG–SÁB × Manhã/Tarde/Noite), como a planilha antiga.
@@ -168,6 +195,10 @@ npm run build      # gera out/
   durante a v1 — migrações destrutivas exigem backup/conferência antes.
 - Migrações do Supabase são **manuais** (via MCP `apply_migration`); a esteira cobre só o front. `main` sem proteção de branch.
   Todo SQL aplicado no remoto também vira arquivo em `supabase/migrations/` com a mesma versão.
+- Edge Functions: MCP `deploy_edge_function` com **`import_map_path: "deno.json"`**; `usuarios` e `ler-plano` com
+  `verify_jwt: true`. Checar antes com `npx -y deno@2.9.6 check index.ts` dentro da pasta da função.
+- Testar regras do banco sem sujar produção: bloco `do $$ … raise exception 'RESULTADO: %' … $$` (o erro final desfaz tudo);
+  simular papel com `set_config('request.jwt.claims', '{"sub":"<uuid>"}', true)` + `set local role authenticated`.
 
 ## Espelho no Google Calendar (v0 — PAUSADO desde 06/10/2026)
 - Pausado para a reestruturação: trigger `agenda_sync_gcal` desligado e job `sync-gcal-conferir` inativo
@@ -180,13 +211,21 @@ npm run build      # gera out/
 - **Na v1:** decidir se volta (provavelmente por instrutor, apontando para o modelo novo de aulas) ou se é aposentado.
 - Recuperação de senha por e-mail não é confiável (Supabase sem SMTP próprio); o Bryam redefine senhas pelo painel.
 
+## Status da v1 (08/10/2026)
+- [x] Banco, regras (choque, 10 h/dia, 11 h), RLS por papel, histórico, RPCs — testados com blocos SQL que desfazem tudo
+- [x] Importação da v0 (535 itens como eventos `origem v0`, 3 usuários)
+- [x] Telas: agenda TEPT (filtro, lançamento com mini calendário, livres por turno, CH da UC, edição/série), agenda do
+      instrutor (Material/PTD, detalhe com elementos da UC, agenda das turmas), painel, cursos/UCs, turmas, pessoas
+- [x] Edge Functions `usuarios` e `ler-plano` publicadas; segmentação do PDF conferida com 5 planos reais
+- [x] Testado no navegador (Edge + Playwright, dev server) com usuário de teste: cadastros, lançamento, bloqueios,
+      instrutor, criação de acesso, importação até a chamada da IA
+- [ ] `ANTHROPIC_API_KEY` nas secrets (sem ela o leitor de PDF responde "não configurada"); primeira leitura real de um plano
+- [ ] Merge na `main` = virada do site para as coordenadoras
+
 ## Próximas etapas (em ordem)
-1. **Desenho da v1** (spec em `docs/superpowers/specs/`): modelo de dados (cursos, UCs, turmas, instrutores, aulas,
-   papéis), regras de conflito e de CH, telas TEPT × Instrutor, migração dos 536 registros da v0.
-2. **Plano** (em `docs/superpowers/plans/`) e execução em etapas pequenas, cada uma publicável:
-   banco + RLS → cadastros (cursos/UCs/turmas/instrutores, com criação de acesso) → leitor de plano de curso com IA
-   → agenda TEPT com conflitos, regras do RH e mini calendário → agenda do instrutor (Material/PTD) → painéis de CH e gráficos.
-3. Decidir o destino do espelho no Google Calendar.
+1. Bryam cadastra `ANTHROPIC_API_KEY`, testa a importação de um plano e revisa a v1 no preview do PR.
+2. Merge na `main` (virada). Avisar as coordenadoras: eventos "v0" são a agenda antiga e podem ser convertidos em aula.
+3. Decidir o destino do espelho no Google Calendar (hoje lê a tabela `agenda` da v0).
 
 ## Decisões já tomadas (out/2026)
 - Limite do RH é **diário** (10 h/dia) + **interjornada de 11 h**, não semanal/mensal.
@@ -204,7 +243,9 @@ npm run build      # gera out/
 - Leitor de plano de curso aceita só PDF.
 
 ## Pendências para confirmar com o Bryam
-- Nenhuma bloqueando o desenho da v1. Dúvidas novas surgem no desenho e entram aqui.
+- Dados de teste ainda no banco de produção (a limpeza foi recusada na sessão de 08/10): usuários
+  `teste.v1@senac-agenda.test` e `teste.inst@senac-agenda.test`, curso "TESTE Curso v1", turma "TESTE Turma v1" e 3 aulas
+  em mar/2027. Apagar quando o Bryam autorizar (itens → historico desses itens → turma → curso → usuarios → auth.users).
 
 ## Contexto externo
 - Arquivos do SENAC: `D:\SENAC` (clone do OneDrive institucional; estrutura Curso → Turma → UC).
