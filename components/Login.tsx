@@ -31,7 +31,7 @@ export default function Login() {
     <main className="login">
       <form onSubmit={entrar} className="login-card">
         <span className="marca-icone grande" aria-hidden="true" />
-        <h1>Agenda Bryam</h1>
+        <h1>Agenda SENAC</h1>
         <p className="muted">SENAC Francisco Beltrão</p>
         <label className="campo">E-mail
           <input type="email" autoComplete="username" value={email}

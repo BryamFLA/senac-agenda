@@ -39,3 +39,20 @@ export function ddmm(d: Date): string {
 export function hhmm(t: string | null): string {
   return t ? t.slice(0, 5) : '';
 }
+
+/** 'YYYY-MM-DD' → Date local (meia-noite), sem passar por UTC. */
+export function deIso(s: string): Date {
+  const [a, m, d] = s.split('-').map(Number);
+  return new Date(a, m - 1, d);
+}
+
+/** Dias de segunda a sábado de um mês. */
+export function diasUteisDoMes(ano: number, mes: number): Date[] {
+  const r: Date[] = [];
+  for (let d = new Date(ano, mes, 1); d.getMonth() === mes; d = addDays(d, 1)) {
+    if (d.getDay() !== 0) r.push(d);
+  }
+  return r;
+}
+
+export const diaSemana = (d: Date) => (d.getDay() + 6) % 7; // 0 = segunda … 5 = sábado

@@ -5,8 +5,8 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'], display: 'swap' });
 
 export const metadata: Metadata = {
-  title: 'Agenda Bryam · SENAC',
-  description: 'Agenda de aulas e compromissos do instrutor Bryam — SENAC Francisco Beltrão',
+  title: 'Agenda SENAC',
+  description: 'Distribuição de aulas e carga horária — SENAC Francisco Beltrão',
   robots: { index: false, follow: false },
 };
 
