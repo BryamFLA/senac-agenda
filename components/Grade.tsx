@@ -1,27 +1,42 @@
 'use client';
-import { Compromisso, Registro, TURNOS, Turno } from '@/lib/types';
+import { Item, TURNOS, Turno } from '@/lib/types';
 import { DIAS, ddmm, hhmm, iso } from '@/lib/datas';
+
+export interface Cartao {
+  titulo: string;
+  sub?: string | null;
+  cor: string;
+  selo?: string; // ex.: "v0" nos itens importados da agenda antiga
+}
 
 interface Props {
   semanas: Date[][];
   mes: number;
-  registros: Map<string, Registro>; // chave `${data}|${turno}`
-  compromissos: Map<string, Compromisso>;
-  onCelula: (data: Date, turno: Turno, registro: Registro | null) => void;
+  itens: Item[];
+  grande?: boolean;
+  descrever: (i: Item) => Cartao;
+  onItem: (i: Item) => void;
+  onCelula?: (data: Date, turno: Turno) => void; // sem isso a grade é só leitura
+  acoes?: (i: Item) => React.ReactNode; // ex.: ícones Material/PTD
 }
 
 /** Horário só aparece no cartão quando foge do horário padrão do turno. */
-function horarioDiferente(r: Registro, t: (typeof TURNOS)[number]): string | null {
-  if (!r.hora_inicio) return null;
-  const ini = hhmm(r.hora_inicio), fim = hhmm(r.hora_fim);
-  if (ini === t.inicio && (!fim || fim === t.fim)) return null;
-  return fim ? `${ini} – ${fim}` : ini;
+function horarioDiferente(i: Item): string | null {
+  const t = TURNOS.find((x) => x.id === i.turno)!;
+  const ini = hhmm(i.hora_inicio), fim = hhmm(i.hora_fim);
+  return ini === t.inicio && fim === t.fim ? null : `${ini} – ${fim}`;
 }
 
-export default function Grade({ semanas, mes, registros, compromissos, onCelula }: Props) {
+export default function Grade({ semanas, mes, itens, grande, descrever, onItem, onCelula, acoes }: Props) {
   const hoje = iso(new Date());
+  const porCelula = new Map<string, Item[]>();
+  for (const i of [...itens].sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio))) {
+    const k = `${i.data}|${i.turno}`;
+    porCelula.set(k, [...(porCelula.get(k) ?? []), i]);
+  }
+
   return (
-    <div className="semanas">
+    <div className={`semanas ${grande ? 'grande' : ''}`}>
       {semanas.map((dias) => (
         <section key={iso(dias[0])} className="semana">
           <div className="g cabeca">
@@ -44,25 +59,32 @@ export default function Grade({ semanas, mes, registros, compromissos, onCelula 
                 <span className="turno-hora">{t.inicio} – {t.fim}</span>
               </div>
               {dias.map((d) => {
-                const r = registros.get(`${iso(d)}|${t.id}`) ?? null;
-                const c = r ? compromissos.get(r.compromisso_id) : undefined;
-                const extra = r ? horarioDiferente(r, t) : null;
-                const sub = r?.observacao || c?.subtitulo;
+                const lista = porCelula.get(`${iso(d)}|${t.id}`) ?? [];
                 return (
-                  <button key={iso(d)} type="button"
-                          className={`celula ${d.getMonth() !== mes ? 'fora' : ''}`}
-                          onClick={() => onCelula(d, t.id, r)}
-                          aria-label={`${DIAS[(d.getDay() + 6) % 7]} ${ddmm(d)}, ${t.nome}: ${c?.nome ?? 'livre'}`}>
-                    {c ? (
-                      <span className="cartao" style={{ '--c': c.cor } as React.CSSProperties}>
-                        <span className="nome">{c.nome}</span>
-                        {sub && <span className="sub">{sub}</span>}
-                        {extra && <span className="hora">{extra}</span>}
-                      </span>
-                    ) : (
-                      <span className="adicionar">+ adicionar</span>
+                  <div key={iso(d)} className={`celula ${d.getMonth() !== mes ? 'fora' : ''} ${onCelula ? 'editavel' : ''}`}>
+                    {lista.map((i) => {
+                      const c = descrever(i);
+                      const extra = horarioDiferente(i);
+                      return (
+                        <div key={i.id} className="cartao" style={{ '--c': c.cor } as React.CSSProperties}>
+                          <button type="button" className="cartao-corpo" onClick={() => onItem(i)}
+                                  aria-label={`${DIAS[(d.getDay() + 6) % 7]} ${ddmm(d)}, ${t.nome}: ${c.titulo}`}>
+                            <span className="nome">{c.titulo}{c.selo && <span className="selo-item">{c.selo}</span>}</span>
+                            {c.sub && <span className="sub">{c.sub}</span>}
+                            {extra && <span className="hora">{extra}</span>}
+                          </button>
+                          {acoes && i.tipo === 'aula' && <div className="cartao-acoes">{acoes(i)}</div>}
+                        </div>
+                      );
+                    })}
+                    {onCelula && (
+                      <button type="button" className={`adicionar ${lista.length ? 'mini' : ''}`}
+                              onClick={() => onCelula(d, t.id)}
+                              aria-label={`Lançar em ${DIAS[(d.getDay() + 6) % 7]} ${ddmm(d)}, ${t.nome}`}>
+                        {lista.length ? '+' : '+ adicionar'}
+                      </button>
                     )}
-                  </button>
+                  </div>
                 );
               })}
             </div>
