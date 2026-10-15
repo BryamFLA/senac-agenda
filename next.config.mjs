@@ -4,6 +4,6 @@ const nextConfig = {
   trailingSlash: true,
   images: { unoptimized: true },
   agentRules: false, // não deixar o next dev reescrever o CLAUDE.md
-  devIndicators: { position: 'bottom-right' }, // o canto esquerdo é do usuário/Sair no menu
+  devIndicators: { position: 'top-right' }, // embaixo ficam o Sair (esquerda) e o botão + da agenda (direita)
 };
 export default nextConfig;

@@ -124,7 +124,8 @@ Plano free do Supabase pode pausar o projeto após dias sem uso — se o site pa
 app/            layout.tsx, page.tsx (sessão, perfil, cadastros; **sem topo**: menu lateral com logo, seções por hash
                 #agenda/#painel/#cursos/#turmas/#pessoas e, embaixo, usuário + Sair), globals.css (todo o estilo)
 components/     Contexto.tsx (cadastros compartilhados), Modal.tsx (+ SeletorCor), Icone.tsx (ícones do menu), Login.tsx, NovaSenha.tsx
-                Agenda.tsx (grade + painel de filtro à direita: Instrutores|Turmas com busca e lista clicável; Material/PTD) · Grade.tsx (vários itens por célula)
+                Agenda.tsx (mês, filtro à direita compartilhado, botão + flutuante para comparar até 2 agendas, nomes com
+                conflito em vermelho) · AgendaColuna.tsx (uma agenda: grade, Material/PTD, lançamento/edição) · Grade.tsx (vários itens por célula)
                 FormItem.tsx (lançar/editar: aula|evento, mini calendário, CH da UC, avisos de conflito, apagar série)
                 ListaEscolha.tsx (lista de instrutores/turmas com ocupados em vermelho) · MiniCalendario.tsx
                 DetalheAula.tsx (visão do instrutor: elementos da UC) · Painel.tsx (andamento, carga, pendências)
@@ -140,7 +141,7 @@ docs/superpowers/      desenhos (specs/) e planos (plans/)
 ```
 
 ## Banco (schema `public`)
-### v1 (migrações `20261008172403_v1_schema`, `20261008172438_v1_importar_v0`, `20261015133617_v1_livres_no_horario`, `20261015135258_v1_conflitos_funcoes`)
+### v1 (migrações `20261008172403_v1_schema`, `20261008172438_v1_importar_v0`, `20261015133617_v1_livres_no_horario`, `20261015135258_v1_conflitos_funcoes`, `20261015140134_v1_ocorrencias_periodo`)
 - **`usuarios`** — `id` = `auth.users.id`, `email`, `nome`, `papel` (`admin` | `tept` | `instrutor`), `leciona` (aparece como
   instrutor), `cor` (pinta as aulas na agenda da turma), `ativo`. Gestor = admin ou tept. Bryam = admin + leciona.
   Novo acesso: pela tela Pessoas (Edge Function `usuarios`); só admin cria/edita admin.
@@ -162,7 +163,8 @@ docs/superpowers/      desenhos (specs/) e planos (plans/)
 - **RPCs:** `disponibilidade_datas(datas[], ini, fim, instrutor, tipo, turma, uc, trabalho, ignorar)` → por data,
   `motivo` (bloqueio) e `conflito` (aviso) — mini calendário (gestor); `ocupacao_no_horario(data, ini, fim, ignorar)` →
   o mesmo por instrutor e por turma — listas do formulário (gestor); `conflitos_periodo(ini, fim)` → conflitos já gravados
-  (cartões vermelhos e painel; filtra o que quem chama pode ver); `marcar_item(id, 'material'|'ptd', bool)` (dono da aula
+  (painel; filtra o que quem chama pode ver); `ocorrencias_periodo(ini, fim)` → o mesmo com `instrutor_id`/`turma_id`
+  (cartões vermelhos e nomes em vermelho no filtro da agenda); `marcar_item(id, 'material'|'ptd', bool)` (dono da aula
   ou gestor); `salvar_curso(json)` (curso + UCs numa transação).
 - **RLS:** `private.papel()/e_gestor()/e_usuario()`. Gestor lê/escreve tudo. Instrutor lê os próprios itens + aulas das
   turmas em que dá aula (`private.minhas_turmas()`), não escreve direto (só via `marcar_item`). Sem cadastro ativo: nada.
@@ -181,7 +183,10 @@ Depois da virada podem virar somente leitura; não apagar sem o Bryam pedir.
 - Cartão pintado via CSS `--c` + `color-mix`: na agenda do instrutor, cor da **turma**; na da turma, cor do **instrutor**.
 - Erros do banco chegam à tela por `mensagemErro()` (`lib/types.ts`): as funções levantam mensagens prontas em português.
 - `next.config.mjs` tem `agentRules: false`: o `next dev` 16.3 reescreve o `CLAUDE.md` sem isso.
-- CSS: a classe `.marca` é do logo do topo; os botões Material/PTD usam `.marcacao`.
+- CSS: a classe `.marca` é do logo; os botões Material/PTD usam `.marcacao`.
+- Comparar agendas: o botão + (canto inferior direito) abre a 2ª agenda; o filtro é um só e vale para a agenda **ativa**
+  (contorno azul, número 1/2); o mês é o mesmo nas duas; gravar em uma recarrega as duas. Comparando, o menu lateral
+  recolhe (`.app:has(.agenda-layout.comparando)`) e a grade fica compacta (`.semanas.compacto`).
 - Layout: não há topo; o título de cada página é o `h1` (30px). Menu lateral de 236px vira só ícones abaixo de 1440px
   e gaveta (barra mínima com ☰ só no celular) abaixo de 900px; o filtro da agenda
   fica à direita (264px) e sobe para cima da grade abaixo de 1200px. A grade tem largura mínima de 788px.

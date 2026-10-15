@@ -1,17 +1,16 @@
 'use client';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { ITEM_CAMPOS, Item, Turno, eGestor, mensagemErro } from '@/lib/types';
-import { MESES, deIso, iso, semanasDoMes } from '@/lib/datas';
+import { eGestor } from '@/lib/types';
+import { MESES, iso, semanasDoMes } from '@/lib/datas';
 import { indices, useCadastros } from './Contexto';
-import Grade, { Cartao } from './Grade';
-import FormItem from './FormItem';
-import DetalheAula from './DetalheAula';
+import AgendaColuna, { Modo, PainelAgenda } from './AgendaColuna';
 import Icone from './Icone';
 
-type Modo = 'instrutor' | 'turma';
-
+const MAX_AGENDAS = 2;
 const normal = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+interface Ocorrencia { item_id: string; instrutor_id: string; turma_id: string | null; motivo: string }
 
 export default function Agenda() {
   const cad = useCadastros();
@@ -19,47 +18,35 @@ export default function Agenda() {
   const gestor = eGestor(cad.eu);
   const hoje = new Date();
 
-  const [modo, setModo] = useState<Modo>('instrutor');
-  const [alvo, setAlvo] = useState<string>(() => {
-    if (!gestor || cad.eu.leciona) return cad.eu.id;
-    return cad.usuarios.find((u) => u.leciona && u.ativo)?.id ?? '';
-  });
+  const alvoInicial = !gestor || cad.eu.leciona ? cad.eu.id : cad.usuarios.find((u) => u.leciona && u.ativo)?.id ?? '';
+  const [paineis, setPaineis] = useState<PainelAgenda[]>([{ id: 1, modo: 'instrutor', alvo: alvoInicial }]);
+  const [ativo, setAtivo] = useState(0);
+  const [filtroModo, setFiltroModo] = useState<Modo>('instrutor');
   const [busca, setBusca] = useState('');
   const [ano, setAno] = useState(hoje.getFullYear());
   const [mes, setMes] = useState(hoje.getMonth());
-  const [itens, setItens] = useState<Item[]>([]);
-  const [conflitos, setConflitos] = useState<Map<string, string>>(new Map());
+  const [versao, setVersao] = useState(0);
+  const [ocorrencias, setOcorrencias] = useState<Ocorrencia[]>([]);
   const [minhasTurmas, setMinhasTurmas] = useState<string[]>([]);
-  const [carregando, setCarregando] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
-  const [form, setForm] = useState<{ data: Date; turno: Turno; item?: Item } | null>(null);
-  const [detalhe, setDetalhe] = useState<Item | null>(null);
 
   const semanas = useMemo(() => semanasDoMes(ano, mes), [ano, mes]);
+  const comparando = paineis.length > 1;
 
-  const carregar = useCallback(async () => {
-    if (!alvo) { setItens([]); return; }
-    setCarregando(true);
-    const ini = iso(semanas[0][0]), fim = iso(semanas[semanas.length - 1][5]);
-    const q = supabase.from('itens').select(ITEM_CAMPOS).gte('data', ini).lte('data', fim);
-    const [{ data, error }, c] = await Promise.all([
-      modo === 'instrutor' ? q.eq('instrutor_id', alvo) : q.eq('turma_id', alvo),
-      supabase.rpc('conflitos_periodo', { p_ini: ini, p_fim: fim }),
-    ]);
-    setCarregando(false);
-    if (error) { setErro('Falha ao carregar a agenda.'); return; }
-    setErro(null);
-    setItens(data as Item[]);
-    setConflitos(new Map(((c.data ?? []) as { item_id: string; motivo: string }[]).map((x) => [x.item_id, x.motivo])));
-  }, [alvo, modo, semanas]);
+  // conflitos já gravados no período visível: cartões e nomes do filtro em vermelho
+  const carregarOcorrencias = useCallback(async () => {
+    const { data } = await supabase.rpc('ocorrencias_periodo', {
+      p_ini: iso(semanas[0][0]), p_fim: iso(semanas[semanas.length - 1][5]),
+    });
+    setOcorrencias((data ?? []) as Ocorrencia[]);
+  }, [semanas]);
+  useEffect(() => { carregarOcorrencias(); }, [carregarOcorrencias, versao]);
 
-  useEffect(() => { carregar(); }, [carregar]);
+  // outra pessoa pode ter editado: recarrega tudo ao voltar para a aba
   useEffect(() => {
-    // outra pessoa pode ter editado: recarrega ao voltar para a aba
-    const f = () => { if (document.visibilityState === 'visible') carregar(); };
+    const f = () => { if (document.visibilityState === 'visible') setVersao((v) => v + 1); };
     document.addEventListener('visibilitychange', f);
     return () => document.removeEventListener('visibilitychange', f);
-  }, [carregar]);
+  }, []);
 
   // instrutor: turmas em que dá aula (pode ver a agenda delas)
   useEffect(() => {
@@ -69,84 +56,71 @@ export default function Agenda() {
     });
   }, [gestor, cad.eu.id]);
 
+  const porItem = useMemo(() => new Map(ocorrencias.map((o) => [o.item_id, o.motivo])), [ocorrencias]);
+  const contagem = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const o of ocorrencias) {
+      m.set(o.instrutor_id, (m.get(o.instrutor_id) ?? 0) + 1);
+      if (o.turma_id) m.set(o.turma_id, (m.get(o.turma_id) ?? 0) + 1);
+    }
+    return m;
+  }, [ocorrencias]);
+
   function navegar(delta: number) {
     const d = new Date(ano, mes + delta, 1);
     setAno(d.getFullYear()); setMes(d.getMonth());
   }
 
-  function descrever(i: Item): Cartao {
-    return { ...cartaoBase(i), alerta: conflitos.get(i.id) ?? null };
+  function ativar(i: number) {
+    if (i === ativo) return;
+    setAtivo(i);
+    setFiltroModo(paineis[i].modo);
+    setBusca('');
+  }
+  function escolher(id: string) {
+    setPaineis((ps) => ps.map((p, i) => (i === ativo ? { ...p, modo: filtroModo, alvo: id } : p)));
+  }
+  function adicionar() {
+    if (paineis.length >= MAX_AGENDAS) return;
+    const novo = { id: Math.max(...paineis.map((p) => p.id)) + 1, modo: filtroModo, alvo: '' };
+    setPaineis((ps) => [...ps, novo]);
+    setAtivo(paineis.length);
+  }
+  function fechar(i: number) {
+    const resto = paineis.filter((_, j) => j !== i);
+    setPaineis(resto);
+    setAtivo(0);
+    setFiltroModo(resto[0]?.modo ?? 'instrutor');
   }
 
-  function cartaoBase(i: Item): Cartao {
-    if (i.tipo === 'evento') {
-      return { titulo: i.titulo ?? 'Evento', sub: i.observacao, cor: i.cor ?? '#64748B', selo: i.origem === 'v0' ? 'v0' : undefined };
-    }
-    const t = i.turma_id ? idx.turma.get(i.turma_id) : undefined;
-    const u = i.uc_id ? idx.uc.get(i.uc_id) : undefined;
-    const ucTxt = u ? `UC${u.numero} · ${u.nome}` : 'UC';
-    if (modo === 'turma') {
-      const p = idx.usuario.get(i.instrutor_id);
-      return { titulo: ucTxt, sub: i.observacao || p?.nome, cor: p?.cor ?? '#004A8D' };
-    }
-    return { titulo: t?.nome ?? 'Turma', sub: i.observacao || ucTxt, cor: t?.cor ?? '#004A8D' };
-  }
-
-  async function marcar(i: Item, campo: 'material' | 'ptd') {
-    const valor = campo === 'material' ? !i.material_ok : !i.ptd_ok;
-    setItens((l) => l.map((x) => x.id === i.id ? { ...x, [campo === 'material' ? 'material_ok' : 'ptd_ok']: valor } : x));
-    const { error } = await supabase.rpc('marcar_item', { p_id: i.id, p_campo: campo, p_valor: valor });
-    if (error) { setErro(mensagemErro(error, 'Não foi possível marcar.')); carregar(); }
-  }
-
-  const podeMarcar = (i: Item) => gestor || i.instrutor_id === cad.eu.id;
-  const acoes = (i: Item) => (
-    <>
-      <button type="button" className={`marcacao ${i.material_ok ? 'ok' : ''}`} disabled={!podeMarcar(i)}
-              onClick={() => marcar(i, 'material')} aria-pressed={i.material_ok}
-              title={i.material_ok ? 'Material pronto' : 'Material pendente'}>
-        <span aria-hidden="true">{i.material_ok ? '✓' : '○'}</span> Material
-      </button>
-      <button type="button" className={`marcacao ${i.ptd_ok ? 'ok' : ''}`} disabled={!podeMarcar(i)}
-              onClick={() => marcar(i, 'ptd')} aria-pressed={i.ptd_ok}
-              title={i.ptd_ok ? 'PTD pronto' : 'PTD pendente'}>
-        <span aria-hidden="true">{i.ptd_ok ? '✓' : '○'}</span> PTD
-      </button>
-    </>
-  );
-
-  // listas do painel de filtro (direita)
-  const instrutores = cad.usuarios.filter((u) => u.leciona && u.ativo)
+  // listas do filtro (direita)
+  const instrutores = (gestor ? cad.usuarios.filter((u) => u.leciona && u.ativo) : cad.usuarios.filter((u) => u.id === cad.eu.id))
     .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
   const turmas = (gestor ? cad.turmas.filter((t) => t.ativo) : cad.turmas.filter((t) => minhasTurmas.includes(t.id)))
     .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
   const q = normal(busca.trim());
-  const lista = modo === 'instrutor'
+  const lista = filtroModo === 'instrutor'
     ? instrutores.filter((u) => !q || normal(u.nome).includes(q))
         .map((u) => ({ id: u.id, nome: u.nome, sub: u.id === cad.eu.id ? 'Você' : null, cor: u.cor }))
     : turmas.filter((t) => !q || normal(`${t.nome} ${t.codigo ?? ''} ${idx.curso.get(t.curso_id)?.nome ?? ''}`).includes(q))
         .map((t) => ({ id: t.id, nome: t.nome, sub: [t.codigo, idx.curso.get(t.curso_id)?.nome].filter(Boolean).join(' · '), cor: t.cor }));
+  const comOcorrencia = lista.filter((x) => contagem.get(x.id)).length;
 
-  function trocarModo(m: Modo) {
-    if (m === modo) return;
-    setModo(m);
-    setBusca('');
-    setAlvo(m === 'instrutor' ? (gestor ? (cad.eu.leciona ? cad.eu.id : instrutores[0]?.id ?? '') : cad.eu.id) : (turmas[0]?.id ?? ''));
-  }
-
-  const nomeAlvo = modo === 'instrutor' ? idx.usuario.get(alvo)?.nome : idx.turma.get(alvo)?.nome;
-  const corAlvo = modo === 'instrutor' ? idx.usuario.get(alvo)?.cor : idx.turma.get(alvo)?.cor;
-  const mostrarFiltro = gestor || minhasTurmas.length > 0;
+  const p0 = paineis[0];
+  const nome0 = p0.modo === 'instrutor' ? idx.usuario.get(p0.alvo)?.nome : idx.turma.get(p0.alvo)?.nome;
+  const cor0 = p0.modo === 'instrutor' ? idx.usuario.get(p0.alvo)?.cor : idx.turma.get(p0.alvo)?.cor;
+  const rotulo0 = p0.modo === 'instrutor' ? (p0.alvo === cad.eu.id ? 'Minha agenda' : 'Agenda do instrutor') : 'Agenda da turma';
+  const mostrarFiltro = gestor || minhasTurmas.length > 0 || comparando;
 
   return (
-    <div className={`agenda-layout ${mostrarFiltro ? '' : 'sem-filtro'}`}>
+    <div className={`agenda-layout ${mostrarFiltro ? '' : 'sem-filtro'} ${comparando ? 'comparando' : ''}`}>
       <section className="agenda-principal">
         <div className="agenda-topo">
           <div className="agenda-titulo">
-            {corAlvo && <span className="bolinha-inline grande" style={{ background: corAlvo }} />}
+            {!comparando && cor0 && <span className="bolinha-inline grande" style={{ background: cor0 }} />}
             <div>
-              <span className="muted pequeno">{modo === 'instrutor' ? (alvo === cad.eu.id ? 'Minha agenda' : 'Agenda do instrutor') : 'Agenda da turma'}</span>
-              <h1>{nomeAlvo ?? '—'}</h1>
+              <span className="muted pequeno">{comparando ? `${paineis.length} agendas lado a lado` : rotulo0}</span>
+              <h1>{comparando ? 'Comparar agendas' : nome0 ?? '—'}</h1>
             </div>
           </div>
           <nav className="mes" aria-label="Mês">
@@ -156,66 +130,79 @@ export default function Agenda() {
             <button className="secundario" onClick={() => { setAno(hoje.getFullYear()); setMes(hoje.getMonth()); }}>Hoje</button>
           </nav>
         </div>
-        {erro && <p className="erro">{erro}</p>}
-        {!alvo ? (
-          <p className="muted vazio">
-            {gestor ? 'Cadastre instrutores e turmas para começar a montar a agenda.' : 'Nada para mostrar ainda.'}
-          </p>
-        ) : (
-          <div className={carregando ? 'carregando' : ''}>
-            <Grade semanas={semanas} mes={mes} itens={itens} grande={!gestor} descrever={descrever}
-                   acoes={acoes}
-                   onItem={(i) => (gestor ? setForm({ data: deIso(i.data), turno: i.turno, item: i }) : setDetalhe(i))}
-                   onCelula={gestor ? (data, turno) => setForm({ data, turno }) : undefined} />
-          </div>
-        )}
+        <div className="agenda-colunas">
+          {paineis.map((p, i) => (
+            <AgendaColuna key={p.id} painel={p} numero={i + 1} ativo={comparando && i === ativo} comparando={comparando}
+                          semanas={semanas} mes={mes} versao={versao} ocorrencias={porItem}
+                          onAtivar={() => ativar(i)} onFechar={comparando ? () => fechar(i) : undefined}
+                          onAlterou={() => setVersao((v) => v + 1)} />
+          ))}
+        </div>
       </section>
 
       {mostrarFiltro && (
         <aside className="filtro-lateral" aria-label="Escolher agenda">
+          {comparando && (
+            <p className="filtro-destino">
+              <span className="filtro-destino-linha">Agenda ativa <span className="coluna-numero">{ativo + 1}</span></span>
+              <span className="muted pequeno">O que você escolher abaixo vai para ela. Clique na outra agenda para trocar.</span>
+            </p>
+          )}
           <div className="segmentado" role="tablist" aria-label="Ver agenda por">
-            <button type="button" role="tab" aria-selected={modo === 'instrutor'} className={modo === 'instrutor' ? 'ativo' : ''}
-                    onClick={() => trocarModo('instrutor')}>{gestor ? 'Instrutores' : 'Minha agenda'}</button>
-            <button type="button" role="tab" aria-selected={modo === 'turma'} className={modo === 'turma' ? 'ativo' : ''}
-                    onClick={() => trocarModo('turma')}>Turmas</button>
+            <button type="button" role="tab" aria-selected={filtroModo === 'instrutor'} className={filtroModo === 'instrutor' ? 'ativo' : ''}
+                    onClick={() => { setFiltroModo('instrutor'); setBusca(''); }}>{gestor ? 'Instrutores' : 'Minha agenda'}</button>
+            <button type="button" role="tab" aria-selected={filtroModo === 'turma'} className={filtroModo === 'turma' ? 'ativo' : ''}
+                    onClick={() => { setFiltroModo('turma'); setBusca(''); }}>Turmas</button>
           </div>
-          {(gestor || modo === 'turma') && (
+          {(gestor || filtroModo === 'turma') && (
             <label className="busca">
               <Icone nome="busca" tamanho={16} />
               <input value={busca} onChange={(e) => setBusca(e.target.value)}
-                     placeholder={modo === 'instrutor' ? 'Buscar instrutor' : 'Buscar turma ou código'} aria-label="Buscar" />
+                     placeholder={filtroModo === 'instrutor' ? 'Buscar instrutor' : 'Buscar turma ou código'} aria-label="Buscar" />
             </label>
           )}
-          {(gestor || modo === 'turma') && (
-            <ul className="filtro-lista" role="listbox" aria-label={modo === 'instrutor' ? 'Instrutores' : 'Turmas'}>
-              {lista.map((x) => (
+          <ul className="filtro-lista" role="listbox" aria-label={filtroModo === 'instrutor' ? 'Instrutores' : 'Turmas'}>
+            {lista.map((x) => {
+              const naAgenda = paineis.map((p, i) => (p.modo === filtroModo && p.alvo === x.id ? i + 1 : 0)).filter(Boolean);
+              const oc = contagem.get(x.id) ?? 0;
+              const selecionado = paineis[ativo]?.modo === filtroModo && paineis[ativo]?.alvo === x.id;
+              return (
                 <li key={x.id}>
-                  <button type="button" role="option" aria-selected={alvo === x.id}
-                          className={`filtro-item ${alvo === x.id ? 'ativo' : ''}`} onClick={() => setAlvo(x.id)}>
+                  <button type="button" role="option" aria-selected={selecionado}
+                          className={`filtro-item ${selecionado ? 'ativo' : ''} ${oc ? 'com-ocorrencia' : ''}`}
+                          onClick={() => escolher(x.id)}
+                          title={oc ? `${oc} ${oc === 1 ? 'item com conflito' : 'itens com conflito'} de horário neste período` : undefined}>
                     <span className="bolinha-inline" style={{ background: x.cor }} />
                     <span className="filtro-texto">
                       <span>{x.nome}</span>
                       {x.sub && <small>{x.sub}</small>}
                     </span>
+                    {oc > 0 && <span className="ocorrencia-qtd" aria-label={`${oc} com conflito`}>⚠ {oc}</span>}
+                    {comparando && naAgenda.map((n) => <span key={n} className="coluna-numero mini">{n}</span>)}
                   </button>
                 </li>
-              ))}
-              {!lista.length && (
-                <li className="muted pequeno filtro-vazio">
-                  {busca ? 'Nada encontrado.' : modo === 'instrutor' ? 'Nenhum instrutor cadastrado.' : 'Nenhuma turma cadastrada.'}
-                </li>
-              )}
-            </ul>
+              );
+            })}
+            {!lista.length && (
+              <li className="muted pequeno filtro-vazio">
+                {busca ? 'Nada encontrado.' : filtroModo === 'instrutor' ? 'Nenhum instrutor cadastrado.' : 'Nenhuma turma.'}
+              </li>
+            )}
+          </ul>
+          {comOcorrencia > 0 && (
+            <p className="filtro-aviso">
+              ⚠ Em vermelho: {comOcorrencia} {filtroModo === 'instrutor' ? 'instrutor(es)' : 'turma(s)'} com conflito de horário em {MESES[mes].toLowerCase()}.
+            </p>
           )}
-          {!gestor && modo === 'instrutor' && <p className="muted pequeno">Mostrando a sua agenda. Em “Turmas” você vê a agenda das turmas em que dá aula.</p>}
         </aside>
       )}
 
-      {form && (
-        <FormItem modo={modo} alvoId={alvo} data={form.data} turno={form.turno} item={form.item}
-                  onClose={() => setForm(null)} onSaved={() => { setForm(null); carregar(); }} />
+      {paineis.length < MAX_AGENDAS && (
+        <button type="button" className="fab" onClick={adicionar} title="Abrir outra agenda ao lado para comparar"
+                aria-label="Abrir outra agenda ao lado para comparar">
+          <span aria-hidden="true">+</span>
+        </button>
       )}
-      {detalhe && <DetalheAula item={detalhe} alerta={conflitos.get(detalhe.id)} onClose={() => setDetalhe(null)} />}
     </div>
   );
 }

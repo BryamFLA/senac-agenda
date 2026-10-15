@@ -15,6 +15,7 @@ interface Props {
   mes: number;
   itens: Item[];
   grande?: boolean;
+  compacto?: boolean; // agendas lado a lado
   descrever: (i: Item) => Cartao;
   onItem: (i: Item) => void;
   onCelula?: (data: Date, turno: Turno) => void; // sem isso a grade é só leitura
@@ -28,7 +29,7 @@ function horarioDiferente(i: Item): string | null {
   return ini === t.inicio && fim === t.fim ? null : `${ini} – ${fim}`;
 }
 
-export default function Grade({ semanas, mes, itens, grande, descrever, onItem, onCelula, acoes }: Props) {
+export default function Grade({ semanas, mes, itens, grande, compacto, descrever, onItem, onCelula, acoes }: Props) {
   const hoje = iso(new Date());
   const porCelula = new Map<string, Item[]>();
   for (const i of [...itens].sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio))) {
@@ -37,7 +38,7 @@ export default function Grade({ semanas, mes, itens, grande, descrever, onItem, 
   }
 
   return (
-    <div className={`semanas ${grande ? 'grande' : ''}`}>
+    <div className={`semanas ${grande ? 'grande' : ''} ${compacto ? 'compacto' : ''}`}>
       {semanas.map((dias) => (
         <section key={iso(dias[0])} className="semana">
           <div className="g cabeca">
