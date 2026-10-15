@@ -61,6 +61,46 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
     });
   }, [turmaId]);
 
+  // quem está livre no dia clicado (ou no dia do item) nesse horário: separa as listas em livres × ocupados
+  const [ocupados, setOcupados] = useState<Map<string, string | null> | null>(null);
+  const dataBase = editando ? dataUnica : iso(data);
+  useEffect(() => {
+    if (fim <= inicio) { setOcupados(null); return; }
+    let vivo = true;
+    const h = setTimeout(async () => {
+      const { data: r } = await supabase.rpc('livres_no_horario', { p_data: dataBase, p_ini: inicio, p_fim: fim, p_ignorar: item?.id ?? null });
+      if (vivo) setOcupados(new Map((r ?? []).map((x: { id: string; motivo: string | null }) => [x.id, x.motivo])));
+    }, 250);
+    return () => { vivo = false; clearTimeout(h); };
+  }, [dataBase, inicio, fim, item?.id]);
+
+  function opcoesComDisponibilidade(lista: { id: string; rotulo: string }[], atual: string) {
+    if (!ocupados) return lista.map((x) => <option key={x.id} value={x.id}>{x.rotulo}</option>);
+    const livres = lista.filter((x) => !ocupados.get(x.id));
+    const presos = lista.filter((x) => !!ocupados.get(x.id));
+    return (
+      <>
+        <optgroup label={`Livres em ${ddmm(deIso(dataBase))}, ${inicio}–${fim}`}>
+          {livres.map((x) => <option key={x.id} value={x.id}>{x.rotulo}</option>)}
+        </optgroup>
+        {presos.length > 0 && (
+          <optgroup label="Ocupados nesse horário">
+            {presos.map((x) => (
+              <option key={x.id} value={x.id} disabled={x.id !== atual}>
+                {x.rotulo} — {(ocupados.get(x.id) ?? '').replace(/^\d\d\/\d\d: /, '')}
+              </option>
+            ))}
+          </optgroup>
+        )}
+      </>
+    );
+  }
+  const contagem = (lista: { id: string }[]) => {
+    if (!ocupados) return null;
+    const n = lista.filter((x) => !ocupados.get(x.id)).length;
+    return `${n} de ${lista.length} livres em ${ddmm(deIso(dataBase))}, ${inicio}–${fim}`;
+  };
+
   // datas consultadas: os dois meses visíveis (novo) ou a data do item (edição)
   const datasConsulta = useMemo(() => {
     if (editando) return [dataUnica];
@@ -212,8 +252,9 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
             <label className="campo">Instrutor
               <select value={instrutorId} onChange={(e) => setInstrutorId(e.target.value)}>
                 <option value="" disabled>Escolha…</option>
-                {instrutores.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
+                {opcoesComDisponibilidade(instrutores.map((u) => ({ id: u.id, rotulo: u.nome })), instrutorId)}
               </select>
+              {contagem(instrutores) && <span className="dica">{contagem(instrutores)}</span>}
             </label>
           )}
 
@@ -221,8 +262,9 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
             <label className="campo">Turma
               <select value={turmaId} onChange={(e) => { setTurmaId(e.target.value); setUcId(''); }}>
                 <option value="" disabled>Escolha…</option>
-                {turmas.map((t) => <option key={t.id} value={t.id}>{t.nome}{t.codigo ? ` — ${t.codigo}` : ''}</option>)}
+                {opcoesComDisponibilidade(turmas.map((t) => ({ id: t.id, rotulo: `${t.nome}${t.codigo ? ` — ${t.codigo}` : ''}` })), turmaId)}
               </select>
+              {contagem(turmas) && <span className="dica">{contagem(turmas)}</span>}
             </label>
           )}
 

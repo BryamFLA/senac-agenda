@@ -11,6 +11,7 @@ import Painel from '@/components/Painel';
 import Cursos from '@/components/Cursos';
 import Turmas from '@/components/Turmas';
 import Pessoas from '@/components/Pessoas';
+import Icone from '@/components/Icone';
 
 type Aba = 'agenda' | 'painel' | 'cursos' | 'turmas' | 'pessoas';
 const ABAS: { id: Aba; nome: string; gestor: boolean }[] = [
@@ -29,6 +30,7 @@ export default function Home() {
   const [dados, setDados] = useState<Dados | null | 'negado'>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [aba, setAba] = useState<Aba>('agenda');
+  const [menuAberto, setMenuAberto] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -99,31 +101,47 @@ export default function Home() {
 
   return (
     <CadastrosCtx.Provider value={ctx}>
-      <header className="topo">
-        <div className="marca">
-          <span className="marca-icone" aria-hidden="true" />
-          <div>
-            <h1>Agenda SENAC</h1>
-            <span className="muted">Francisco Beltrão</span>
+      <div className={`app ${menuAberto ? 'menu-aberto' : ''}`}>
+        <header className="topo">
+          <button className="icone so-celular" onClick={() => setMenuAberto((m) => !m)} aria-label="Abrir menu"
+                  aria-expanded={menuAberto}>
+            <Icone nome="menu" />
+          </button>
+          <div className="marca">
+            <span className="marca-icone" aria-hidden="true" />
+            <div>
+              <h1>Agenda SENAC</h1>
+              <span className="muted">Francisco Beltrão</span>
+            </div>
           </div>
-        </div>
-        <nav className="abas" aria-label="Seções">
+          <div className="usuario">
+            <span className="usuario-nome">
+              <strong>{ctx.eu.nome}</strong>
+              <span className="muted">{gestor ? (ctx.eu.papel === 'admin' ? 'Administrador' : 'TEPT') : 'Instrutor'}</span>
+            </span>
+            <button className="secundario sair" onClick={() => supabase.auth.signOut()}>
+              <Icone nome="sair" tamanho={18} /> Sair
+            </button>
+          </div>
+        </header>
+        <nav className="lateral" aria-label="Seções">
           {abas.map((a) => (
-            <a key={a.id} href={`#${a.id}`} className={`aba ${atual === a.id ? 'ativa' : ''}`}
-               aria-current={atual === a.id ? 'page' : undefined}>{a.nome}</a>
+            <a key={a.id} href={`#${a.id}`} className={`lateral-item ${atual === a.id ? 'ativa' : ''}`}
+               aria-current={atual === a.id ? 'page' : undefined} title={a.nome} onClick={() => setMenuAberto(false)}>
+              <Icone nome={a.id} /> <span>{a.nome}</span>
+            </a>
           ))}
         </nav>
-        <div className="usuario">
-          <span className="muted">{ctx.eu.nome}</span>
-          <button className="link" onClick={() => supabase.auth.signOut()}>Sair</button>
-        </div>
-      </header>
-      {erro && <p className="erro faixa">{erro}</p>}
-      {atual === 'agenda' && <Agenda />}
-      {atual === 'painel' && <Painel />}
-      {atual === 'cursos' && <Cursos />}
-      {atual === 'turmas' && <Turmas />}
-      {atual === 'pessoas' && <Pessoas />}
+        <div className="fundo-menu" onClick={() => setMenuAberto(false)} aria-hidden="true" />
+        <main className="conteudo">
+          {erro && <p className="erro faixa">{erro}</p>}
+          {atual === 'agenda' && <Agenda />}
+          {atual === 'painel' && <Painel />}
+          {atual === 'cursos' && <Cursos />}
+          {atual === 'turmas' && <Turmas />}
+          {atual === 'pessoas' && <Pessoas />}
+        </main>
+      </div>
     </CadastrosCtx.Provider>
   );
 }

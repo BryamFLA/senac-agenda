@@ -119,9 +119,10 @@ Plano free do Supabase pode pausar o projeto após dias sem uso — se o site pa
 
 ## Estrutura (v1)
 ```
-app/            layout.tsx, page.tsx (sessão, perfil, cadastros, abas por hash #agenda/#painel/#cursos/#turmas/#pessoas), globals.css (todo o estilo)
-components/     Contexto.tsx (cadastros compartilhados), Modal.tsx (+ SeletorCor), Login.tsx, NovaSenha.tsx
-                Agenda.tsx (filtro instrutor|turma, grade, Material/PTD) · Grade.tsx (vários itens por célula)
+app/            layout.tsx, page.tsx (sessão, perfil, cadastros; topo com logo + Sair, menu lateral com seções por hash
+                #agenda/#painel/#cursos/#turmas/#pessoas), globals.css (todo o estilo)
+components/     Contexto.tsx (cadastros compartilhados), Modal.tsx (+ SeletorCor), Icone.tsx (ícones do menu), Login.tsx, NovaSenha.tsx
+                Agenda.tsx (grade + painel de filtro à direita: Instrutores|Turmas com busca e lista clicável; Material/PTD) · Grade.tsx (vários itens por célula)
                 FormItem.tsx (lançar/editar: aula|evento, mini calendário, CH da UC, apagar série) · MiniCalendario.tsx
                 DetalheAula.tsx (visão do instrutor: elementos da UC) · Painel.tsx (andamento, carga, pendências)
                 Cursos.tsx (+ ElementosUC, edição de UC) · ImportarPlano.tsx (PDF → IA → revisão) · Turmas.tsx · Pessoas.tsx
@@ -136,7 +137,7 @@ docs/superpowers/      desenhos (specs/) e planos (plans/)
 ```
 
 ## Banco (schema `public`)
-### v1 (migrações `20261008172403_v1_schema` e `20261008172438_v1_importar_v0`)
+### v1 (migrações `20261008172403_v1_schema`, `20261008172438_v1_importar_v0`, `20261015133617_v1_livres_no_horario`)
 - **`usuarios`** — `id` = `auth.users.id`, `email`, `nome`, `papel` (`admin` | `tept` | `instrutor`), `leciona` (aparece como
   instrutor), `cor` (pinta as aulas na agenda da turma), `ativo`. Gestor = admin ou tept. Bryam = admin + leciona.
   Novo acesso: pela tela Pessoas (Edge Function `usuarios`); só admin cria/edita admin.
@@ -153,7 +154,9 @@ docs/superpowers/      desenhos (specs/) e planos (plans/)
   (10 h/dia e 11 h de interjornada, só itens `trabalho`). Tudo em `private.motivo_bloqueio()` / `private.motivo_jornada()`.
   `app.ignorar_regras = on` (set_config local) desliga as regras — usado **só** na importação da v0.
 - **RPCs:** `disponibilidade(datas[], ini, fim, instrutor, tipo, turma, uc, trabalho, ignorar)` → motivo por data (gestor);
-  `marcar_item(id, 'material'|'ptd', bool)` (dono da aula ou gestor); `salvar_curso(json)` (curso + UCs numa transação).
+  `livres_no_horario(data, ini, fim, ignorar)` → motivo por instrutor e por turma (gestor; separa as listas do formulário
+  em "Livres" × "Ocupados nesse horário"); `marcar_item(id, 'material'|'ptd', bool)` (dono da aula ou gestor);
+  `salvar_curso(json)` (curso + UCs numa transação).
 - **RLS:** `private.papel()/e_gestor()/e_usuario()`. Gestor lê/escreve tudo. Instrutor lê os próprios itens + aulas das
   turmas em que dá aula (`private.minhas_turmas()`), não escreve direto (só via `marcar_item`). Sem cadastro ativo: nada.
 - **Dados da v0:** os 535 registros viraram **eventos do Bryam com `origem = 'v0'`** (selo "v0" no cartão; feriado/férias/
@@ -172,6 +175,8 @@ Depois da virada podem virar somente leitura; não apagar sem o Bryam pedir.
 - Erros do banco chegam à tela por `mensagemErro()` (`lib/types.ts`): as funções levantam mensagens prontas em português.
 - `next.config.mjs` tem `agentRules: false`: o `next dev` 16.3 reescreve o `CLAUDE.md` sem isso.
 - CSS: a classe `.marca` é do logo do topo; os botões Material/PTD usam `.marcacao`.
+- Layout: menu lateral de 228px vira só ícones abaixo de 1440px e gaveta (botão ☰) abaixo de 900px; o filtro da agenda
+  fica à direita (264px) e sobe para cima da grade abaixo de 1200px. A grade tem largura mínima de 788px.
 - **Interface:** tema **somente claro**, identidade SENAC (Manual da Marca): azul `#004A8D` (Pantone 288 C) e
   laranja `#F7941D` (Pantone 144 C). Azul = ações e títulos; laranja = "hoje"/foco. Fonte Inter, base 16px, visual limpo.
   Grade: semanas empilhadas (SEG–SÁB × Manhã/Tarde/Noite), como a planilha antiga.

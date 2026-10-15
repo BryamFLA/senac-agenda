@@ -7,8 +7,11 @@ import { indices, useCadastros } from './Contexto';
 import Grade, { Cartao } from './Grade';
 import FormItem from './FormItem';
 import DetalheAula from './DetalheAula';
+import Icone from './Icone';
 
 type Modo = 'instrutor' | 'turma';
+
+const normal = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 export default function Agenda() {
   const cad = useCadastros();
@@ -21,6 +24,7 @@ export default function Agenda() {
     if (!gestor || cad.eu.leciona) return cad.eu.id;
     return cad.usuarios.find((u) => u.leciona && u.ativo)?.id ?? '';
   });
+  const [busca, setBusca] = useState('');
   const [ano, setAno] = useState(hoje.getFullYear());
   const [mes, setMes] = useState(hoje.getMonth());
   const [itens, setItens] = useState<Item[]>([]);
@@ -102,63 +106,107 @@ export default function Agenda() {
     </>
   );
 
-  const instrutores = cad.usuarios.filter((u) => u.leciona && (u.ativo || u.id === alvo));
-  const turmasFiltro = gestor ? cad.turmas.filter((t) => t.ativo || t.id === alvo) : cad.turmas.filter((t) => minhasTurmas.includes(t.id));
+  // listas do painel de filtro (direita)
+  const instrutores = cad.usuarios.filter((u) => u.leciona && u.ativo)
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  const turmas = (gestor ? cad.turmas.filter((t) => t.ativo) : cad.turmas.filter((t) => minhasTurmas.includes(t.id)))
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  const q = normal(busca.trim());
+  const lista = modo === 'instrutor'
+    ? instrutores.filter((u) => !q || normal(u.nome).includes(q))
+        .map((u) => ({ id: u.id, nome: u.nome, sub: u.id === cad.eu.id ? 'Você' : null, cor: u.cor }))
+    : turmas.filter((t) => !q || normal(`${t.nome} ${t.codigo ?? ''} ${idx.curso.get(t.curso_id)?.nome ?? ''}`).includes(q))
+        .map((t) => ({ id: t.id, nome: t.nome, sub: [t.codigo, idx.curso.get(t.curso_id)?.nome].filter(Boolean).join(' · '), cor: t.cor }));
+
+  function trocarModo(m: Modo) {
+    if (m === modo) return;
+    setModo(m);
+    setBusca('');
+    setAlvo(m === 'instrutor' ? (gestor ? (cad.eu.leciona ? cad.eu.id : instrutores[0]?.id ?? '') : cad.eu.id) : (turmas[0]?.id ?? ''));
+  }
+
+  const nomeAlvo = modo === 'instrutor' ? idx.usuario.get(alvo)?.nome : idx.turma.get(alvo)?.nome;
+  const corAlvo = modo === 'instrutor' ? idx.usuario.get(alvo)?.cor : idx.turma.get(alvo)?.cor;
+  const mostrarFiltro = gestor || minhasTurmas.length > 0;
 
   return (
-    <>
-      <div className="barra">
-        <div className="filtro">
-          {gestor || minhasTurmas.length ? (
-            <div className="opcoes" role="group" aria-label="Ver agenda por">
-              <button type="button" className={`opcao ${modo === 'instrutor' ? 'ativa' : ''}`} aria-pressed={modo === 'instrutor'}
-                      onClick={() => { setModo('instrutor'); setAlvo(gestor ? (instrutores[0]?.id ?? '') : cad.eu.id); }}>
-                {gestor ? 'Instrutor' : 'Minha agenda'}
-              </button>
-              <button type="button" className={`opcao ${modo === 'turma' ? 'ativa' : ''}`} aria-pressed={modo === 'turma'}
-                      onClick={() => { setModo('turma'); setAlvo(turmasFiltro[0]?.id ?? ''); }}>
-                Turma
-              </button>
+    <div className={`agenda-layout ${mostrarFiltro ? '' : 'sem-filtro'}`}>
+      <section className="agenda-principal">
+        <div className="agenda-topo">
+          <div className="agenda-titulo">
+            {corAlvo && <span className="bolinha-inline grande" style={{ background: corAlvo }} />}
+            <div>
+              <span className="muted pequeno">{modo === 'instrutor' ? (alvo === cad.eu.id ? 'Minha agenda' : 'Agenda do instrutor') : 'Agenda da turma'}</span>
+              <h2>{nomeAlvo ?? '—'}</h2>
             </div>
-          ) : null}
-          {modo === 'instrutor' && gestor && (
-            <select value={alvo} onChange={(e) => setAlvo(e.target.value)} aria-label="Instrutor">
-              {!instrutores.length && <option value="">Nenhum instrutor cadastrado</option>}
-              {instrutores.map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
-            </select>
-          )}
-          {modo === 'turma' && (
-            <select value={alvo} onChange={(e) => setAlvo(e.target.value)} aria-label="Turma">
-              {!turmasFiltro.length && <option value="">Nenhuma turma</option>}
-              {turmasFiltro.map((t) => <option key={t.id} value={t.id}>{t.nome}{t.codigo ? ` — ${t.codigo}` : ''}</option>)}
-            </select>
-          )}
+          </div>
+          <nav className="mes" aria-label="Mês">
+            <button className="icone" onClick={() => navegar(-1)} aria-label="Mês anterior">‹</button>
+            <strong>{MESES[mes]} <span className="ano">{ano}</span></strong>
+            <button className="icone" onClick={() => navegar(1)} aria-label="Próximo mês">›</button>
+            <button className="secundario" onClick={() => { setAno(hoje.getFullYear()); setMes(hoje.getMonth()); }}>Hoje</button>
+          </nav>
         </div>
-        <nav className="mes" aria-label="Mês">
-          <button className="icone" onClick={() => navegar(-1)} aria-label="Mês anterior">‹</button>
-          <strong>{MESES[mes]} <span className="ano">{ano}</span></strong>
-          <button className="icone" onClick={() => navegar(1)} aria-label="Próximo mês">›</button>
-          <button className="secundario" onClick={() => { setAno(hoje.getFullYear()); setMes(hoje.getMonth()); }}>Hoje</button>
-        </nav>
-      </div>
-      {erro && <p className="erro faixa">{erro}</p>}
-      {!alvo ? (
-        <p className="muted faixa">
-          {gestor ? 'Cadastre instrutores e turmas para começar a montar a agenda.' : 'Nada para mostrar ainda.'}
-        </p>
-      ) : (
-        <main className={carregando ? 'carregando' : ''}>
-          <Grade semanas={semanas} mes={mes} itens={itens} grande={!gestor} descrever={descrever}
-                 acoes={acoes}
-                 onItem={(i) => (gestor ? setForm({ data: deIso(i.data), turno: i.turno, item: i }) : setDetalhe(i))}
-                 onCelula={gestor ? (data, turno) => setForm({ data, turno }) : undefined} />
-        </main>
+        {erro && <p className="erro">{erro}</p>}
+        {!alvo ? (
+          <p className="muted vazio">
+            {gestor ? 'Cadastre instrutores e turmas para começar a montar a agenda.' : 'Nada para mostrar ainda.'}
+          </p>
+        ) : (
+          <div className={carregando ? 'carregando' : ''}>
+            <Grade semanas={semanas} mes={mes} itens={itens} grande={!gestor} descrever={descrever}
+                   acoes={acoes}
+                   onItem={(i) => (gestor ? setForm({ data: deIso(i.data), turno: i.turno, item: i }) : setDetalhe(i))}
+                   onCelula={gestor ? (data, turno) => setForm({ data, turno }) : undefined} />
+          </div>
+        )}
+      </section>
+
+      {mostrarFiltro && (
+        <aside className="filtro-lateral" aria-label="Escolher agenda">
+          <div className="segmentado" role="tablist" aria-label="Ver agenda por">
+            <button type="button" role="tab" aria-selected={modo === 'instrutor'} className={modo === 'instrutor' ? 'ativo' : ''}
+                    onClick={() => trocarModo('instrutor')}>{gestor ? 'Instrutores' : 'Minha agenda'}</button>
+            <button type="button" role="tab" aria-selected={modo === 'turma'} className={modo === 'turma' ? 'ativo' : ''}
+                    onClick={() => trocarModo('turma')}>Turmas</button>
+          </div>
+          {(gestor || modo === 'turma') && (
+            <label className="busca">
+              <Icone nome="busca" tamanho={16} />
+              <input value={busca} onChange={(e) => setBusca(e.target.value)}
+                     placeholder={modo === 'instrutor' ? 'Buscar instrutor' : 'Buscar turma ou código'} aria-label="Buscar" />
+            </label>
+          )}
+          {(gestor || modo === 'turma') && (
+            <ul className="filtro-lista" role="listbox" aria-label={modo === 'instrutor' ? 'Instrutores' : 'Turmas'}>
+              {lista.map((x) => (
+                <li key={x.id}>
+                  <button type="button" role="option" aria-selected={alvo === x.id}
+                          className={`filtro-item ${alvo === x.id ? 'ativo' : ''}`} onClick={() => setAlvo(x.id)}>
+                    <span className="bolinha-inline" style={{ background: x.cor }} />
+                    <span className="filtro-texto">
+                      <span>{x.nome}</span>
+                      {x.sub && <small>{x.sub}</small>}
+                    </span>
+                  </button>
+                </li>
+              ))}
+              {!lista.length && (
+                <li className="muted pequeno filtro-vazio">
+                  {busca ? 'Nada encontrado.' : modo === 'instrutor' ? 'Nenhum instrutor cadastrado.' : 'Nenhuma turma cadastrada.'}
+                </li>
+              )}
+            </ul>
+          )}
+          {!gestor && modo === 'instrutor' && <p className="muted pequeno">Mostrando a sua agenda. Em “Turmas” você vê a agenda das turmas em que dá aula.</p>}
+        </aside>
       )}
+
       {form && (
         <FormItem modo={modo} alvoId={alvo} data={form.data} turno={form.turno} item={form.item}
                   onClose={() => setForm(null)} onSaved={() => { setForm(null); carregar(); }} />
       )}
       {detalhe && <DetalheAula item={detalhe} onClose={() => setDetalhe(null)} />}
-    </>
+    </div>
   );
 }
