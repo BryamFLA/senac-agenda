@@ -102,35 +102,42 @@ export default function Home() {
   return (
     <CadastrosCtx.Provider value={ctx}>
       <div className={`app ${menuAberto ? 'menu-aberto' : ''}`}>
-        <header className="topo">
-          <button className="icone so-celular" onClick={() => setMenuAberto((m) => !m)} aria-label="Abrir menu"
-                  aria-expanded={menuAberto}>
+        {/* barra mínima só no celular, para abrir o menu */}
+        <div className="barra-celular">
+          <button className="icone" onClick={() => setMenuAberto((m) => !m)} aria-label="Abrir menu" aria-expanded={menuAberto}>
             <Icone nome="menu" />
           </button>
-          <div className="marca">
+          <span className="marca-icone" aria-hidden="true" />
+          <strong>Agenda SENAC</strong>
+        </div>
+        <nav className="lateral" aria-label="Menu">
+          <div className="lateral-marca">
             <span className="marca-icone" aria-hidden="true" />
-            <div>
-              <h1>Agenda SENAC</h1>
-              <span className="muted">Francisco Beltrão</span>
-            </div>
-          </div>
-          <div className="usuario">
-            <span className="usuario-nome">
-              <strong>{ctx.eu.nome}</strong>
-              <span className="muted">{gestor ? (ctx.eu.papel === 'admin' ? 'Administrador' : 'TEPT') : 'Instrutor'}</span>
+            <span className="lateral-texto">
+              <strong>Agenda SENAC</strong>
+              <span>Francisco Beltrão</span>
             </span>
-            <button className="secundario sair" onClick={() => supabase.auth.signOut()}>
-              <Icone nome="sair" tamanho={18} /> Sair
+          </div>
+          <div className="lateral-itens">
+            {abas.map((a) => (
+              <a key={a.id} href={`#${a.id}`} className={`lateral-item ${atual === a.id ? 'ativa' : ''}`}
+                 aria-current={atual === a.id ? 'page' : undefined} title={a.nome} onClick={() => setMenuAberto(false)}>
+                <Icone nome={a.id} /> <span className="lateral-texto">{a.nome}</span>
+              </a>
+            ))}
+          </div>
+          <div className="lateral-usuario">
+            <span className="avatar" style={{ background: ctx.eu.cor }} title={ctx.eu.nome} aria-hidden="true">
+              {ctx.eu.nome.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join('').toUpperCase()}
+            </span>
+            <span className="lateral-texto">
+              <strong>{ctx.eu.nome}</strong>
+              <span>{gestor ? (ctx.eu.papel === 'admin' ? 'Administrador' : 'TEPT') : 'Instrutor'}</span>
+            </span>
+            <button className="icone sair" onClick={() => supabase.auth.signOut()} aria-label="Sair" title="Sair">
+              <Icone nome="sair" tamanho={18} />
             </button>
           </div>
-        </header>
-        <nav className="lateral" aria-label="Seções">
-          {abas.map((a) => (
-            <a key={a.id} href={`#${a.id}`} className={`lateral-item ${atual === a.id ? 'ativa' : ''}`}
-               aria-current={atual === a.id ? 'page' : undefined} title={a.nome} onClick={() => setMenuAberto(false)}>
-              <Icone nome={a.id} /> <span>{a.nome}</span>
-            </a>
-          ))}
         </nav>
         <div className="fundo-menu" onClick={() => setMenuAberto(false)} aria-hidden="true" />
         <main className="conteudo">

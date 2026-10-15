@@ -27,7 +27,7 @@ export default function Pessoas() {
     <section className="pagina">
       <header className="pagina-topo">
         <div>
-          <h2>Pessoas</h2>
+          <h1>Pessoas</h1>
           <p className="muted">Quem acessa o sistema. TEPTs montam a agenda; instrutores veem a própria agenda e marcam material e PTD.</p>
         </div>
         <span className="flex" />

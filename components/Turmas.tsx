@@ -17,7 +17,7 @@ export default function Turmas() {
     <section className="pagina">
       <header className="pagina-topo">
         <div>
-          <h2>Turmas</h2>
+          <h1>Turmas</h1>
           <p className="muted">Cada turma faz o curso completo; a cor pinta as aulas na agenda do instrutor.</p>
         </div>
         <span className="flex" />

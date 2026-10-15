@@ -97,7 +97,7 @@ export default function Painel() {
     <section className="pagina">
       <header className="pagina-topo">
         <div>
-          <h2>Painel</h2>
+          <h1>Painel</h1>
           <p className="muted">Andamento das UCs e carga horária dos instrutores. Horas em tempo de relógio.</p>
         </div>
       </header>

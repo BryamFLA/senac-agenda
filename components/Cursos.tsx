@@ -38,7 +38,7 @@ export default function Cursos() {
     <section className="pagina">
       <header className="pagina-topo">
         <div>
-          <h2>Cursos</h2>
+          <h1>Cursos</h1>
           <p className="muted">Cursos e unidades curriculares, vindos do plano de curso.</p>
         </div>
         <span className="flex" />

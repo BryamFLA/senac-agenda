@@ -119,8 +119,8 @@ Plano free do Supabase pode pausar o projeto após dias sem uso — se o site pa
 
 ## Estrutura (v1)
 ```
-app/            layout.tsx, page.tsx (sessão, perfil, cadastros; topo com logo + Sair, menu lateral com seções por hash
-                #agenda/#painel/#cursos/#turmas/#pessoas), globals.css (todo o estilo)
+app/            layout.tsx, page.tsx (sessão, perfil, cadastros; **sem topo**: menu lateral com logo, seções por hash
+                #agenda/#painel/#cursos/#turmas/#pessoas e, embaixo, usuário + Sair), globals.css (todo o estilo)
 components/     Contexto.tsx (cadastros compartilhados), Modal.tsx (+ SeletorCor), Icone.tsx (ícones do menu), Login.tsx, NovaSenha.tsx
                 Agenda.tsx (grade + painel de filtro à direita: Instrutores|Turmas com busca e lista clicável; Material/PTD) · Grade.tsx (vários itens por célula)
                 FormItem.tsx (lançar/editar: aula|evento, mini calendário, CH da UC, apagar série) · MiniCalendario.tsx
@@ -175,7 +175,8 @@ Depois da virada podem virar somente leitura; não apagar sem o Bryam pedir.
 - Erros do banco chegam à tela por `mensagemErro()` (`lib/types.ts`): as funções levantam mensagens prontas em português.
 - `next.config.mjs` tem `agentRules: false`: o `next dev` 16.3 reescreve o `CLAUDE.md` sem isso.
 - CSS: a classe `.marca` é do logo do topo; os botões Material/PTD usam `.marcacao`.
-- Layout: menu lateral de 228px vira só ícones abaixo de 1440px e gaveta (botão ☰) abaixo de 900px; o filtro da agenda
+- Layout: não há topo; o título de cada página é o `h1` (30px). Menu lateral de 236px vira só ícones abaixo de 1440px
+  e gaveta (barra mínima com ☰ só no celular) abaixo de 900px; o filtro da agenda
   fica à direita (264px) e sobe para cima da grade abaixo de 1200px. A grade tem largura mínima de 788px.
 - **Interface:** tema **somente claro**, identidade SENAC (Manual da Marca): azul `#004A8D` (Pantone 288 C) e
   laranja `#F7941D` (Pantone 144 C). Azul = ações e títulos; laranja = "hoje"/foco. Fonte Inter, base 16px, visual limpo.

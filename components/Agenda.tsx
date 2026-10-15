@@ -137,7 +137,7 @@ export default function Agenda() {
             {corAlvo && <span className="bolinha-inline grande" style={{ background: corAlvo }} />}
             <div>
               <span className="muted pequeno">{modo === 'instrutor' ? (alvo === cad.eu.id ? 'Minha agenda' : 'Agenda do instrutor') : 'Agenda da turma'}</span>
-              <h2>{nomeAlvo ?? '—'}</h2>
+              <h1>{nomeAlvo ?? '—'}</h1>
             </div>
           </div>
           <nav className="mes" aria-label="Mês">
