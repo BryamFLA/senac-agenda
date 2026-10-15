@@ -130,6 +130,7 @@ components/     Contexto.tsx (cadastros compartilhados), Modal.tsx (+ SeletorCor
                 ListaEscolha.tsx (lista de instrutores/turmas com ocupados em vermelho) · MiniCalendario.tsx
                 DetalheAula.tsx (visão do instrutor: elementos da UC) · Painel.tsx (andamento, carga, pendências)
                 Cursos.tsx (+ ElementosUC, edição de UC) · ImportarPlano.tsx (PDF → IA → revisão) · Turmas.tsx · Pessoas.tsx
+                Filtros.tsx (barra de busca + filtros das telas de cadastro: Busca, Filtro, SITUACOES)
 lib/            supabase.ts, types.ts (tipos, TURNOS, CORES, minutos/fmtMin, mensagemErro), datas.ts,
                 plano.ts (corta o texto do plano em partes — função pura), pdf.ts (pdf.js no navegador)
 supabase/migrations/   SQL versionado — nomes batem com as versões aplicadas no remoto
@@ -147,7 +148,9 @@ docs/superpowers/      desenhos (specs/) e planos (plans/)
   Novo acesso: pela tela Pessoas (Edge Function `usuarios`); só admin cria/edita admin.
 - **`cursos`** (`ch_total`, `hora_aula_min` 60|50, `codigo_dn`, `cbo`, `ativo`) → **`ucs`** (`numero` único no curso, `nome`,
   `ch`, `tipo` regular|projeto_integrador, `indicadores[]`, `conhecimentos[]`, `habilidades[]`, `atitudes[]`, `integra[]`).
-- **`turmas`** — `curso_id`, `codigo` (9 dígitos, único, opcional), `nome`, `cor`, datas, `ativo`.
+- **`turmas`** — `curso_id`, `codigo` (9 dígitos, único; obrigatório na tela), `nome`, `cor`, datas, `ativo`.
+  A turma **não tem nome próprio**: `nome` é gerado como "código · curso" (`nomeAutomatico` em `Turmas.tsx`) e é
+  regravado quando o curso é renomeado. Nas listas aparece o código com o curso embaixo.
 - **`itens`** — cada item da agenda: `tipo` aula|evento, `data`, `hora_inicio`/`hora_fim` (obrigatórios), `turno` (coluna
   gerada pelo início: <12h M, <18h T, senão N), `periodo` (tsrange gerado), `instrutor_id`, `turma_id`+`uc_id` (aula),
   `titulo`+`cor`+`trabalho` (evento), `observacao`, `material_ok`, `ptd_ok`, `serie_id` (lançados juntos), `origem` v1|v0.
@@ -182,7 +185,9 @@ Depois da virada podem virar somente leitura; não apagar sem o Bryam pedir.
 - **Nunca apagar registro com histórico ligado** — desativar (`ativo = false`). FKs bloqueiam apagar UC/turma com aulas.
 - Cartão pintado via CSS `--c` + `color-mix`: na agenda do instrutor, cor da **turma**; na da turma, cor do **instrutor**.
 - Erros do banco chegam à tela por `mensagemErro()` (`lib/types.ts`): as funções levantam mensagens prontas em português.
-- `next.config.mjs` tem `agentRules: false`: o `next dev` 16.3 reescreve o `CLAUDE.md` sem isso.
+- `next.config.mjs` tem `agentRules: false` (o `next dev` 16.3 reescreve o `CLAUDE.md` sem isso) e `devIndicators: false`.
+- Telas de cadastro: largura total, barra de filtros no topo (busca + filtros + contador). Cursos: eixo, segmento,
+  situação. Turmas: curso, situação. Pessoas: papel, dá aula, situação.
 - CSS: a classe `.marca` é do logo; os botões Material/PTD usam `.marcacao`.
 - Comparar agendas: o botão + (canto inferior direito) abre a 2ª agenda; o filtro é um só e vale para a agenda **ativa**
   (contorno azul, número 1/2); o mês é o mesmo nas duas; gravar em uma recarrega as duas. Comparando, o menu lateral

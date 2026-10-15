@@ -242,7 +242,7 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
 
           {ehAula && !fixoTurma && (
             <ListaEscolha rotulo="Turma" valor={turmaId} onChange={(id) => { setTurmaId(id); setUcId(''); }} situacao={ocupacao}
-                          itens={turmas.map((t) => ({ id: t.id, nome: t.nome, sub: t.codigo, cor: t.cor }))}
+                          itens={turmas.map((t) => ({ id: t.id, nome: t.codigo ?? t.nome, sub: cad.cursos.find((c) => c.id === t.curso_id)?.nome, cor: t.cor }))}
                           resumo={resumoLista(turmas)} />
           )}
 

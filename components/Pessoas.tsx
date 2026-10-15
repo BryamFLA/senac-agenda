@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { CORES, PAPEIS, Papel, Usuario, mensagemErro } from '@/lib/types';
 import { useCadastros } from './Contexto';
 import Modal, { SeletorCor } from './Modal';
+import { BarraFiltros, Busca, Filtro, SITUACOES, confereSituacao, normal } from './Filtros';
 
 async function chamar(corpo: object): Promise<string | null> {
   const { error } = await supabase.functions.invoke('usuarios', { body: corpo });
@@ -21,8 +22,18 @@ const nomePapel = (p: Papel) => PAPEIS.find((x) => x.id === p)?.nome ?? p;
 export default function Pessoas() {
   const cad = useCadastros();
   const [editar, setEditar] = useState<Usuario | 'novo' | null>(null);
-  const lista = [...cad.usuarios].sort((a, b) => Number(b.ativo) - Number(a.ativo) || a.nome.localeCompare(b.nome, 'pt-BR'));
+  const [busca, setBusca] = useState('');
+  const [papel, setPapel] = useState('');
+  const [leciona, setLeciona] = useState('');
+  const [situacao, setSituacao] = useState('ativos');
 
+  const q = normal(busca.trim());
+  const lista = cad.usuarios
+    .filter((u) => confereSituacao(situacao, u.ativo))
+    .filter((u) => !papel || u.papel === papel)
+    .filter((u) => !leciona || (leciona === 'sim' ? u.leciona : !u.leciona))
+    .filter((u) => !q || normal(`${u.nome} ${u.email}`).includes(q))
+    .sort((a, b) => Number(b.ativo) - Number(a.ativo) || a.nome.localeCompare(b.nome, 'pt-BR'));
   return (
     <section className="pagina">
       <header className="pagina-topo">
@@ -33,7 +44,16 @@ export default function Pessoas() {
         <span className="flex" />
         <button onClick={() => setEditar('novo')}>+ Novo acesso</button>
       </header>
-      <div className="tabela-rolagem">
+      <BarraFiltros total={lista.length} rotulo={['pessoa', 'pessoas']}>
+        <Busca valor={busca} onChange={setBusca} placeholder="Buscar por nome ou e-mail" />
+        <Filtro rotulo="Papel" valor={papel} onChange={setPapel}
+                opcoes={[{ valor: '', nome: 'Todos' }, ...PAPEIS.map((p) => ({ valor: p.id, nome: p.nome }))]} />
+        <Filtro rotulo="Dá aula" valor={leciona} onChange={setLeciona}
+                opcoes={[{ valor: '', nome: 'Todos' }, { valor: 'sim', nome: 'Sim' }, { valor: 'nao', nome: 'Não' }]} />
+        <Filtro rotulo="Situação" valor={situacao} onChange={setSituacao} opcoes={SITUACOES} />
+      </BarraFiltros>
+      {!lista.length && <p className="muted vazio">Ninguém com esses filtros.</p>}
+      <div className="tabela-rolagem" hidden={!lista.length}>
         <table className="tabela">
           <thead><tr><th>Nome</th><th>E-mail</th><th>Papel</th><th>Dá aula</th><th>Situação</th></tr></thead>
           <tbody>

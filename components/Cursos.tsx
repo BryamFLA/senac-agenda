@@ -5,6 +5,8 @@ import { Curso, UC, fmtHoras, mensagemErro } from '@/lib/types';
 import { useCadastros } from './Contexto';
 import Modal from './Modal';
 import ImportarPlano from './ImportarPlano';
+import { BarraFiltros, Busca, Filtro, SITUACOES, confereSituacao, normal } from './Filtros';
+import { nomeAutomatico } from './Turmas';
 
 const linhas = (s: string) => s.split('\n').map((x) => x.trim()).filter(Boolean);
 
@@ -30,9 +32,21 @@ export default function Cursos() {
   const cad = useCadastros();
   const [aberto, setAberto] = useState<Curso | null>(null);
   const [importar, setImportar] = useState<'pdf' | 'manual' | null>(null);
-  const [inativos, setInativos] = useState(false);
+  const [busca, setBusca] = useState('');
+  const [eixo, setEixo] = useState('');
+  const [segmento, setSegmento] = useState('');
+  const [situacao, setSituacao] = useState('ativos');
 
-  const lista = cad.cursos.filter((c) => inativos || c.ativo).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  const distintos = (k: 'eixo' | 'segmento') =>
+    [...new Set(cad.cursos.map((c) => c[k]).filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const q = normal(busca.trim());
+  const lista = cad.cursos
+    .filter((c) => confereSituacao(situacao, c.ativo))
+    .filter((c) => !eixo || c.eixo === eixo)
+    .filter((c) => !segmento || c.segmento === segmento)
+    .filter((c) => !q || normal(`${c.nome} ${c.codigo_dn ?? ''} ${c.cbo ?? ''}`).includes(q))
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  const filtrando = !!(q || eixo || segmento || situacao !== 'ativos');
 
   return (
     <section className="pagina">
@@ -45,8 +59,19 @@ export default function Cursos() {
         <button className="secundario" onClick={() => setImportar('manual')}>Cadastrar manualmente</button>
         <button onClick={() => setImportar('pdf')}>Importar plano (PDF)</button>
       </header>
-      <label className="check"><input type="checkbox" checked={inativos} onChange={(e) => setInativos(e.target.checked)} /> Mostrar inativos</label>
-      {!lista.length && <p className="muted vazio">Nenhum curso ainda. Importe o PDF do plano de curso para começar.</p>}
+      <BarraFiltros total={lista.length} rotulo={['curso', 'cursos']}>
+        <Busca valor={busca} onChange={setBusca} placeholder="Buscar por nome ou código DN" />
+        <Filtro rotulo="Eixo" valor={eixo} onChange={setEixo}
+                opcoes={[{ valor: '', nome: 'Todos' }, ...distintos('eixo').map((x) => ({ valor: x, nome: x }))]} />
+        <Filtro rotulo="Segmento" valor={segmento} onChange={setSegmento}
+                opcoes={[{ valor: '', nome: 'Todos' }, ...distintos('segmento').map((x) => ({ valor: x, nome: x }))]} />
+        <Filtro rotulo="Situação" valor={situacao} onChange={setSituacao} opcoes={SITUACOES} />
+      </BarraFiltros>
+      {!lista.length && (
+        <p className="muted vazio">
+          {filtrando ? 'Nenhum curso com esses filtros.' : 'Nenhum curso ainda. Importe o PDF do plano de curso para começar.'}
+        </p>
+      )}
       <div className="lista-cartoes">
         {lista.map((c) => {
           const ucs = cad.ucs.filter((u) => u.curso_id === c.id);
@@ -55,6 +80,7 @@ export default function Cursos() {
           return (
             <button key={c.id} className={`cartao-lista ${c.ativo ? '' : 'inativo'}`} onClick={() => setAberto(c)}>
               <strong>{c.nome}</strong>
+              {(c.eixo || c.segmento) && <span className="cartao-lista-meta">{[c.eixo, c.segmento].filter(Boolean).join(' · ')}</span>}
               <span className="muted">{fmtHoras(Number(c.ch_total))} · {ucs.length} UCs · hora-aula {c.hora_aula_min} min · {turmas} turma(s)</span>
               {Math.abs(soma - Number(c.ch_total)) > 0.01 && <span className="erro">Soma das UCs: {fmtHoras(soma)}</span>}
               {!c.ativo && <span className="selo-item">inativo</span>}
@@ -83,6 +109,11 @@ function CursoDetalhe({ curso, onClose }: { curso: Curso; onClose: () => void })
       nome: c.nome.trim(), eixo: c.eixo || null, segmento: c.segmento || null, ch_total: Number(c.ch_total),
       codigo_dn: c.codigo_dn || null, cbo: c.cbo || null, hora_aula_min: Number(c.hora_aula_min), ativo: c.ativo,
     }).eq('id', c.id);
+    if (!error && c.nome.trim() !== curso.nome) {
+      // o nome da turma é "código · curso": acompanha o novo nome do curso
+      await Promise.all(cad.turmas.filter((t) => t.curso_id === c.id && t.codigo)
+        .map((t) => supabase.from('turmas').update({ nome: nomeAutomatico(t.codigo!, c.nome.trim()) }).eq('id', t.id)));
+    }
     setSalvando(false);
     if (error) return setErro(mensagemErro(error));
     await cad.recarregar();

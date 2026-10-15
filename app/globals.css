@@ -333,11 +333,28 @@ input:disabled, select:disabled { background: var(--neutro); color: var(--texto-
 .minical-legenda i.sel { background: var(--azul); }
 
 /* ---------- páginas de cadastro ---------- */
-.pagina { max-width: 1400px; display: grid; gap: 16px; }
+.pagina { display: grid; gap: 16px; }
+/* barra de busca + filtros das telas de cadastro */
+.barra-filtros {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 14px; padding: 14px 16px;
+  background: var(--superficie); border: 1px solid var(--linha); border-radius: var(--raio);
+  box-shadow: 0 1px 2px rgb(16 24 40 / .04);
+}
+.barra-busca { flex: 1 1 280px; max-width: 520px; }
+.barra-busca input { padding-right: 34px; }
+.barra-busca .limpar {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 26px; height: 26px; padding: 0;
+  border-radius: 50%; background: transparent; color: var(--texto-suave); font-size: 18px; line-height: 1;
+}
+.barra-busca .limpar:hover { background: var(--neutro); color: var(--texto); }
+.filtro-select { display: grid; gap: 4px; font-size: 12.5px; font-weight: 600; color: var(--texto-suave); min-width: 160px; }
+.filtro-select select { padding: 9px 10px; font-size: 14.5px; }
+.contagem { margin-left: auto; align-self: flex-end; padding-bottom: 11px; font-size: 14px; color: var(--texto-suave); white-space: nowrap; }
+.cartao-lista-meta { font-size: 13.5px; color: var(--texto); font-weight: 500; }
 .pagina-topo { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .pagina-topo h1 { margin: 0; color: var(--azul); font-size: 30px; font-weight: 750; letter-spacing: -.01em; line-height: 1.15; }
 .pagina-topo p { margin: 2px 0 0; }
-.lista-cartoes { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.lista-cartoes { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
 .cartao-lista {
   --c: var(--azul);
   display: grid; gap: 4px; text-align: left; padding: 16px 18px; border-radius: var(--raio);
@@ -563,6 +580,8 @@ p.pequeno { margin: 0; }
 @media (max-width: 720px) {
   .conteudo { padding: 16px; }
   .agenda-titulo h1, .pagina-topo h1 { font-size: 24px; }
+  .filtro-select { flex: 1 1 140px; min-width: 0; }
+  .contagem { margin-left: 0; }
   .mes strong { min-width: 130px; font-size: 18px; }
 }
 .nowrap { white-space: nowrap; }

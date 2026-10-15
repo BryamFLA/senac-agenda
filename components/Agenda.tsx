@@ -103,7 +103,7 @@ export default function Agenda() {
     ? instrutores.filter((u) => !q || normal(u.nome).includes(q))
         .map((u) => ({ id: u.id, nome: u.nome, sub: u.id === cad.eu.id ? 'Você' : null, cor: u.cor }))
     : turmas.filter((t) => !q || normal(`${t.nome} ${t.codigo ?? ''} ${idx.curso.get(t.curso_id)?.nome ?? ''}`).includes(q))
-        .map((t) => ({ id: t.id, nome: t.nome, sub: [t.codigo, idx.curso.get(t.curso_id)?.nome].filter(Boolean).join(' · '), cor: t.cor }));
+        .map((t) => ({ id: t.id, nome: t.codigo ?? t.nome, sub: idx.curso.get(t.curso_id)?.nome ?? null, cor: t.cor }));
   const comOcorrencia = lista.filter((x) => contagem.get(x.id)).length;
 
   const p0 = paineis[0];
