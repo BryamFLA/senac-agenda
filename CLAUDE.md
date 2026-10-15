@@ -61,7 +61,9 @@ Contexto para agentes (Claude Code) trabalharem neste repositório. Leia inteiro
 - Vê as próprias horas e o andamento das UCs que leciona. Não cadastra nem lança aulas.
 
 ### Regras de domínio da v1 (não quebrar)
-- Conflito é bloqueio, não aviso: não gravar aula que choca instrutor ou turma (a TEPT vê o porquê).
+- **Choque de horário é aviso, não bloqueio** (decisão de 15/10): dá para gravar dois itens sobrepostos (instrutor ou
+  turma), mas a TEPT é avisada **antes** (nome em vermelho na lista, data em vermelho no calendário, caixa de aviso com
+  confirmação) e **depois** (cartão vermelho com ⚠ na agenda, card "Conflitos de horário" no painel).
   Eventos avulsos também ocupam o instrutor.
 - **Regras do RH (por instrutor, tempo de relógio, contando aulas e eventos avulsos de trabalho — reunião, viagem etc.):**
   - no máximo **10 h de trabalho por dia**;
@@ -123,7 +125,8 @@ app/            layout.tsx, page.tsx (sessão, perfil, cadastros; **sem topo**: 
                 #agenda/#painel/#cursos/#turmas/#pessoas e, embaixo, usuário + Sair), globals.css (todo o estilo)
 components/     Contexto.tsx (cadastros compartilhados), Modal.tsx (+ SeletorCor), Icone.tsx (ícones do menu), Login.tsx, NovaSenha.tsx
                 Agenda.tsx (grade + painel de filtro à direita: Instrutores|Turmas com busca e lista clicável; Material/PTD) · Grade.tsx (vários itens por célula)
-                FormItem.tsx (lançar/editar: aula|evento, mini calendário, CH da UC, apagar série) · MiniCalendario.tsx
+                FormItem.tsx (lançar/editar: aula|evento, mini calendário, CH da UC, avisos de conflito, apagar série)
+                ListaEscolha.tsx (lista de instrutores/turmas com ocupados em vermelho) · MiniCalendario.tsx
                 DetalheAula.tsx (visão do instrutor: elementos da UC) · Painel.tsx (andamento, carga, pendências)
                 Cursos.tsx (+ ElementosUC, edição de UC) · ImportarPlano.tsx (PDF → IA → revisão) · Turmas.tsx · Pessoas.tsx
 lib/            supabase.ts, types.ts (tipos, TURNOS, CORES, minutos/fmtMin, mensagemErro), datas.ts,
@@ -137,7 +140,7 @@ docs/superpowers/      desenhos (specs/) e planos (plans/)
 ```
 
 ## Banco (schema `public`)
-### v1 (migrações `20261008172403_v1_schema`, `20261008172438_v1_importar_v0`, `20261015133617_v1_livres_no_horario`)
+### v1 (migrações `20261008172403_v1_schema`, `20261008172438_v1_importar_v0`, `20261015133617_v1_livres_no_horario`, `20261015135258_v1_conflitos_funcoes`)
 - **`usuarios`** — `id` = `auth.users.id`, `email`, `nome`, `papel` (`admin` | `tept` | `instrutor`), `leciona` (aparece como
   instrutor), `cor` (pinta as aulas na agenda da turma), `ativo`. Gestor = admin ou tept. Bryam = admin + leciona.
   Novo acesso: pela tela Pessoas (Edge Function `usuarios`); só admin cria/edita admin.
@@ -149,14 +152,18 @@ docs/superpowers/      desenhos (specs/) e planos (plans/)
   `titulo`+`cor`+`trabalho` (evento), `observacao`, `material_ok`, `ptd_ok`, `serie_id` (lançados juntos), `origem` v1|v0.
 - **`historico`** — auditoria de `itens` (trigger `itens_audit`). View **`progresso`** (security_invoker): horas agendadas e
   realizadas por turma × UC.
-- **Regras no banco:** exclusion constraints `itens_sem_choque_instrutor` / `itens_sem_choque_turma` (btree_gist);
-  trigger `itens_validar` (coerência + choque com mensagem em português); constraint trigger **diferido** `itens_jornada`
-  (10 h/dia e 11 h de interjornada, só itens `trabalho`). Tudo em `private.motivo_bloqueio()` / `private.motivo_jornada()`.
+- **Regras no banco:** trigger `itens_validar` (coerência da aula, mensagem em português) e constraint trigger
+  **diferido** `itens_jornada` (10 h/dia pela **união** dos horários e 11 h de interjornada, só itens `trabalho`) —
+  esses **bloqueiam**. Choque de horário **não bloqueia**: `private.motivo_conflito()` só gera o aviso.
+  Funções: `private.motivo_bloqueio()` (coerência + RH), `private.motivo_jornada()`, `private.motivo_conflito()`.
+  As exclusion constraints antigas `itens_sem_choque_*` são removidas por `supabase/manual/2026-10-15_remover_travas_de_choque.sql`
+  (rodado à mão no SQL Editor; o MCP recusa `drop`).
   `app.ignorar_regras = on` (set_config local) desliga as regras — usado **só** na importação da v0.
-- **RPCs:** `disponibilidade(datas[], ini, fim, instrutor, tipo, turma, uc, trabalho, ignorar)` → motivo por data (gestor);
-  `livres_no_horario(data, ini, fim, ignorar)` → motivo por instrutor e por turma (gestor; separa as listas do formulário
-  em "Livres" × "Ocupados nesse horário"); `marcar_item(id, 'material'|'ptd', bool)` (dono da aula ou gestor);
-  `salvar_curso(json)` (curso + UCs numa transação).
+- **RPCs:** `disponibilidade_datas(datas[], ini, fim, instrutor, tipo, turma, uc, trabalho, ignorar)` → por data,
+  `motivo` (bloqueio) e `conflito` (aviso) — mini calendário (gestor); `ocupacao_no_horario(data, ini, fim, ignorar)` →
+  o mesmo por instrutor e por turma — listas do formulário (gestor); `conflitos_periodo(ini, fim)` → conflitos já gravados
+  (cartões vermelhos e painel; filtra o que quem chama pode ver); `marcar_item(id, 'material'|'ptd', bool)` (dono da aula
+  ou gestor); `salvar_curso(json)` (curso + UCs numa transação).
 - **RLS:** `private.papel()/e_gestor()/e_usuario()`. Gestor lê/escreve tudo. Instrutor lê os próprios itens + aulas das
   turmas em que dá aula (`private.minhas_turmas()`), não escreve direto (só via `marcar_item`). Sem cadastro ativo: nada.
 - **Dados da v0:** os 535 registros viraram **eventos do Bryam com `origem = 'v0'`** (selo "v0" no cartão; feriado/férias/
@@ -237,7 +244,8 @@ npm run build      # gera out/
 - Limite do RH é **diário** (10 h/dia) + **interjornada de 11 h**, não semanal/mensal.
 - Repetição por **mini calendário** com dias livres/bloqueados; mesmo horário em todos os dias marcados.
 - Agenda e CH usam **tempo de relógio** (início/fim). Hora-aula (60/50 min) fica no curso, só para a chamada futura.
-- Limite de 10 h/dia conta aulas + reuniões, viagens e demais eventos de trabalho.
+- Limite de 10 h/dia conta aulas + reuniões, viagens e demais eventos de trabalho (horários sobrepostos contam uma vez).
+- Choque de horário (instrutor ou turma) é permitido com aviso antes e depois; RH continua bloqueando.
 - Eventos avulsos ocupam a agenda do instrutor sem turma.
 - Só TEPTs cadastram cursos, UCs, turmas e instrutores. Aula só para instrutor cadastrado.
 - Cursos e UCs entram pelo **leitor de plano de curso com IA** (PDF → revisão da TEPT → banco).

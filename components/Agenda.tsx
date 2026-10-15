@@ -28,6 +28,7 @@ export default function Agenda() {
   const [ano, setAno] = useState(hoje.getFullYear());
   const [mes, setMes] = useState(hoje.getMonth());
   const [itens, setItens] = useState<Item[]>([]);
+  const [conflitos, setConflitos] = useState<Map<string, string>>(new Map());
   const [minhasTurmas, setMinhasTurmas] = useState<string[]>([]);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -39,13 +40,17 @@ export default function Agenda() {
   const carregar = useCallback(async () => {
     if (!alvo) { setItens([]); return; }
     setCarregando(true);
-    const q = supabase.from('itens').select(ITEM_CAMPOS)
-      .gte('data', iso(semanas[0][0])).lte('data', iso(semanas[semanas.length - 1][5]));
-    const { data, error } = await (modo === 'instrutor' ? q.eq('instrutor_id', alvo) : q.eq('turma_id', alvo));
+    const ini = iso(semanas[0][0]), fim = iso(semanas[semanas.length - 1][5]);
+    const q = supabase.from('itens').select(ITEM_CAMPOS).gte('data', ini).lte('data', fim);
+    const [{ data, error }, c] = await Promise.all([
+      modo === 'instrutor' ? q.eq('instrutor_id', alvo) : q.eq('turma_id', alvo),
+      supabase.rpc('conflitos_periodo', { p_ini: ini, p_fim: fim }),
+    ]);
     setCarregando(false);
     if (error) { setErro('Falha ao carregar a agenda.'); return; }
     setErro(null);
     setItens(data as Item[]);
+    setConflitos(new Map(((c.data ?? []) as { item_id: string; motivo: string }[]).map((x) => [x.item_id, x.motivo])));
   }, [alvo, modo, semanas]);
 
   useEffect(() => { carregar(); }, [carregar]);
@@ -70,6 +75,10 @@ export default function Agenda() {
   }
 
   function descrever(i: Item): Cartao {
+    return { ...cartaoBase(i), alerta: conflitos.get(i.id) ?? null };
+  }
+
+  function cartaoBase(i: Item): Cartao {
     if (i.tipo === 'evento') {
       return { titulo: i.titulo ?? 'Evento', sub: i.observacao, cor: i.cor ?? '#64748B', selo: i.origem === 'v0' ? 'v0' : undefined };
     }
@@ -206,7 +215,7 @@ export default function Agenda() {
         <FormItem modo={modo} alvoId={alvo} data={form.data} turno={form.turno} item={form.item}
                   onClose={() => setForm(null)} onSaved={() => { setForm(null); carregar(); }} />
       )}
-      {detalhe && <DetalheAula item={detalhe} onClose={() => setDetalhe(null)} />}
+      {detalhe && <DetalheAula item={detalhe} alerta={conflitos.get(detalhe.id)} onClose={() => setDetalhe(null)} />}
     </div>
   );
 }

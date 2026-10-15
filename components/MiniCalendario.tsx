@@ -1,17 +1,18 @@
 'use client';
 import { DIAS, MESES, diaSemana, diasUteisDoMes, iso } from '@/lib/datas';
+import type { Situacao } from './ListaEscolha';
 
 interface Props {
   ano: number;
   mes: number; // primeiro dos dois meses mostrados
   onNavegar: (delta: number) => void;
   selecionadas: Set<string>;
-  motivos: Map<string, string | null> | null; // null = verificando
+  motivos: Map<string, Situacao> | null; // null = verificando
   onAlternar: (data: string) => void;
   onDiaSemana: (dow: number, datas: string[]) => void;
 }
 
-/** Dois meses lado a lado (SEG–SÁB). Cada data mostra se está livre ou bloqueada (motivo no título). */
+/** Dois meses lado a lado (SEG–SÁB). Cada data: livre, com conflito de horário (aviso) ou bloqueada (RH). */
 export default function MiniCalendario({ ano, mes, onNavegar, selecionadas, motivos, onAlternar, onDiaSemana }: Props) {
   const hoje = iso(new Date());
   const meses = [0, 1].map((k) => {
@@ -42,14 +43,16 @@ export default function MiniCalendario({ ano, mes, onNavegar, selecionadas, moti
                 {Array.from({ length: vazios }, (_, i) => <span key={`v${i}`} />)}
                 {m.dias.map((d) => {
                   const k = iso(d);
-                  const motivo = motivos?.get(k);
-                  const bloqueada = !!motivo;
+                  const s = motivos?.get(k);
+                  const bloqueada = !!s?.motivo;
+                  const conflito = !bloqueada && !!s?.conflito;
+                  const motivo = s?.motivo ?? s?.conflito ?? null;
                   const sel = selecionadas.has(k);
                   return (
                     <button key={k} type="button" onClick={() => onAlternar(k)}
-                            className={`minical-dia ${sel ? 'sel' : ''} ${bloqueada ? 'bloq' : motivos ? 'livre' : ''} ${k === hoje ? 'hoje' : ''} ${k < hoje ? 'passado' : ''}`}
+                            className={`minical-dia ${sel ? 'sel' : ''} ${bloqueada ? 'bloq' : conflito ? 'conflito' : motivos ? 'livre' : ''} ${k === hoje ? 'hoje' : ''} ${k < hoje ? 'passado' : ''}`}
                             title={motivo ?? (motivos ? 'Livre' : '')} aria-pressed={sel}
-                            aria-label={`${k}${bloqueada ? `: ${motivo}` : ''}`}>
+                            aria-label={`${k}${motivo ? `: ${motivo}` : ''}`}>
                       {d.getDate()}
                     </button>
                   );
@@ -61,8 +64,10 @@ export default function MiniCalendario({ ano, mes, onNavegar, selecionadas, moti
       </div>
       <div className="minical-legenda">
         <span><i className="livre" /> livre</span>
-        <span><i className="bloq" /> bloqueada (passe o mouse para ver o motivo)</span>
+        <span><i className="conflito" /> conflito de horário (pode lançar, com aviso)</span>
+        <span><i className="bloq" /> bloqueada pelo RH</span>
         <span><i className="sel" /> selecionada</span>
+        <span className="pequeno">Passe o mouse na data para ver o motivo.</span>
       </div>
     </div>
   );

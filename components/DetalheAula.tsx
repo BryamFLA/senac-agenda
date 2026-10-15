@@ -6,7 +6,7 @@ import Modal from './Modal';
 import { ElementosUC } from './Cursos';
 
 /** Visão do instrutor ao clicar numa aula ou evento: dados da aula e os elementos da UC (para o PTD). */
-export default function DetalheAula({ item, onClose }: { item: Item; onClose: () => void }) {
+export default function DetalheAula({ item, alerta, onClose }: { item: Item; alerta?: string; onClose: () => void }) {
   const cad = useCadastros();
   const d = deIso(item.data);
   const turma = cad.turmas.find((t) => t.id === item.turma_id);
@@ -19,6 +19,7 @@ export default function DetalheAula({ item, onClose }: { item: Item; onClose: ()
     <Modal largo titulo={item.tipo === 'aula' ? `${turma?.nome ?? 'Aula'}` : item.titulo ?? 'Evento'}
            subtitulo={`${DIAS_LONGOS[diaSemana(d)] ?? 'Domingo'}, ${ddmm(d)} · ${hhmm(item.hora_inicio)}–${hhmm(item.hora_fim)} (${fmtMin(minutos(item.hora_inicio, item.hora_fim))}) · ${instrutor?.nome ?? ''}`}
            onClose={onClose}>
+      {alerta && <div className="alerta conflito"><strong>⚠ Conflito de horário</strong><span>{alerta}</span></div>}
       {item.observacao && <p className="nota">{item.observacao}</p>}
       {uc && (
         <div className="form">

@@ -7,6 +7,7 @@ export interface Cartao {
   sub?: string | null;
   cor: string;
   selo?: string; // ex.: "v0" nos itens importados da agenda antiga
+  alerta?: string | null; // conflito de horário já gravado
 }
 
 interface Props {
@@ -66,10 +67,12 @@ export default function Grade({ semanas, mes, itens, grande, descrever, onItem, 
                       const c = descrever(i);
                       const extra = horarioDiferente(i);
                       return (
-                        <div key={i.id} className="cartao" style={{ '--c': c.cor } as React.CSSProperties}>
+                        <div key={i.id} className={`cartao ${c.alerta ? 'com-conflito' : ''}`} style={{ '--c': c.cor } as React.CSSProperties}
+                             title={c.alerta ? `Conflito de horário: ${c.alerta}` : undefined}>
                           <button type="button" className="cartao-corpo" onClick={() => onItem(i)}
                                   aria-label={`${DIAS[(d.getDay() + 6) % 7]} ${ddmm(d)}, ${t.nome}: ${c.titulo}`}>
-                            <span className="nome">{c.titulo}{c.selo && <span className="selo-item">{c.selo}</span>}</span>
+                            <span className="nome">{c.alerta && <span className="selo-conflito" aria-label="Conflito de horário">⚠</span>}{c.titulo}{c.selo && <span className="selo-item">{c.selo}</span>}</span>
+                            {c.alerta && <span className="sub alerta-txt">{c.alerta}</span>}
                             {c.sub && <span className="sub">{c.sub}</span>}
                             {extra && <span className="hora">{extra}</span>}
                           </button>

@@ -6,6 +6,7 @@ import { DIAS_LONGOS, ddmm, deIso, diaSemana, diasUteisDoMes, hhmm, iso } from '
 import { useCadastros } from './Contexto';
 import Modal, { SeletorCor } from './Modal';
 import MiniCalendario from './MiniCalendario';
+import ListaEscolha, { Situacao } from './ListaEscolha';
 
 interface Props {
   modo: 'instrutor' | 'turma'; // filtro da agenda: fixa o instrutor ou a turma num lançamento novo
@@ -38,10 +39,11 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
   const [datas, setDatas] = useState<Set<string>>(new Set([iso(data)]));
   const [dataUnica, setDataUnica] = useState(iso(data));
   const [cal, setCal] = useState({ ano: data.getFullYear(), mes: data.getMonth() });
-  const [motivos, setMotivos] = useState<Map<string, string | null> | null>(null);
+  const [motivos, setMotivos] = useState<Map<string, Situacao> | null>(null);
   const [livresPorTurno, setLivresPorTurno] = useState<Record<string, number> | null>(null);
   const [agendadoUc, setAgendadoUc] = useState<Map<string, number>>(new Map());
   const [confirmaCh, setConfirmaCh] = useState(false);
+  const [confirmaConflito, setConfirmaConflito] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -61,44 +63,23 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
     });
   }, [turmaId]);
 
-  // quem está livre no dia clicado (ou no dia do item) nesse horário: separa as listas em livres × ocupados
-  const [ocupados, setOcupados] = useState<Map<string, string | null> | null>(null);
+  // situação de cada instrutor/turma no dia clicado (ou no dia do item) nesse horário
+  const [ocupacao, setOcupacao] = useState<Map<string, Situacao> | null>(null);
   const dataBase = editando ? dataUnica : iso(data);
   useEffect(() => {
-    if (fim <= inicio) { setOcupados(null); return; }
+    if (fim <= inicio) { setOcupacao(null); return; }
     let vivo = true;
     const h = setTimeout(async () => {
-      const { data: r } = await supabase.rpc('livres_no_horario', { p_data: dataBase, p_ini: inicio, p_fim: fim, p_ignorar: item?.id ?? null });
-      if (vivo) setOcupados(new Map((r ?? []).map((x: { id: string; motivo: string | null }) => [x.id, x.motivo])));
+      const { data: r } = await supabase.rpc('ocupacao_no_horario', { p_data: dataBase, p_ini: inicio, p_fim: fim, p_ignorar: item?.id ?? null });
+      if (vivo) setOcupacao(new Map((r ?? []).map((x: { id: string } & Situacao) => [x.id, { motivo: x.motivo, conflito: x.conflito }])));
     }, 250);
     return () => { vivo = false; clearTimeout(h); };
   }, [dataBase, inicio, fim, item?.id]);
 
-  function opcoesComDisponibilidade(lista: { id: string; rotulo: string }[], atual: string) {
-    if (!ocupados) return lista.map((x) => <option key={x.id} value={x.id}>{x.rotulo}</option>);
-    const livres = lista.filter((x) => !ocupados.get(x.id));
-    const presos = lista.filter((x) => !!ocupados.get(x.id));
-    return (
-      <>
-        <optgroup label={`Livres em ${ddmm(deIso(dataBase))}, ${inicio}–${fim}`}>
-          {livres.map((x) => <option key={x.id} value={x.id}>{x.rotulo}</option>)}
-        </optgroup>
-        {presos.length > 0 && (
-          <optgroup label="Ocupados nesse horário">
-            {presos.map((x) => (
-              <option key={x.id} value={x.id} disabled={x.id !== atual}>
-                {x.rotulo} — {(ocupados.get(x.id) ?? '').replace(/^\d\d\/\d\d: /, '')}
-              </option>
-            ))}
-          </optgroup>
-        )}
-      </>
-    );
-  }
-  const contagem = (lista: { id: string }[]) => {
-    if (!ocupados) return null;
-    const n = lista.filter((x) => !ocupados.get(x.id)).length;
-    return `${n} de ${lista.length} livres em ${ddmm(deIso(dataBase))}, ${inicio}–${fim}`;
+  const resumoLista = (lista: { id: string }[]) => {
+    if (!ocupacao) return null;
+    const livres = lista.filter((x) => !ocupacao.get(x.id)?.motivo && !ocupacao.get(x.id)?.conflito).length;
+    return `${livres} de ${lista.length} livres em ${ddmm(deIso(dataBase))}, ${inicio}–${fim}. Em vermelho: horário ocupado.`;
   };
 
   // datas consultadas: os dois meses visíveis (novo) ou a data do item (edição)
@@ -114,7 +95,7 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
 
   const pronto = !!instrutorId && (!ehAula || (!!turmaId && !!ucId)) && (ehAula || !!titulo.trim()) && fim > inicio;
 
-  const rpc = (ini: string, f: string) => supabase.rpc('disponibilidade', {
+  const rpc = (ini: string, f: string) => supabase.rpc('disponibilidade_datas', {
     p_datas: datasConsulta, p_ini: ini, p_fim: f, p_instrutor: instrutorId, p_tipo: tipo,
     p_turma: ehAula ? turmaId : null, p_uc: ehAula ? ucId : null, p_trabalho: ehAula ? true : trabalho,
     p_ignorar: item?.id ?? null,
@@ -128,7 +109,7 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
       const { data: r, error } = await rpc(inicio, fim);
       if (!vivo) return;
       if (error) { setErro(mensagemErro(error, 'Falha ao verificar a disponibilidade.')); return; }
-      setMotivos(new Map((r ?? []).map((x: { data: string; motivo: string | null }) => [x.data, x.motivo])));
+      setMotivos(new Map((r ?? []).map((x: { data: string } & Situacao) => [x.data, { motivo: x.motivo, conflito: x.conflito }])));
     }, 250);
     return () => { vivo = false; clearTimeout(h); };
   }, [pronto, datasConsulta, inicio, fim, instrutorId, turmaId, ucId, tipo, trabalho]);
@@ -142,7 +123,7 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
       await Promise.all(TURNOS.map(async (t) => {
         const { data: x } = await rpc(t.inicio, t.fim);
         const hojeIso = iso(new Date());
-        r[t.id] = (x ?? []).filter((y: { data: string; motivo: string | null }) => !y.motivo && y.data >= hojeIso).length;
+        r[t.id] = (x ?? []).filter((y: { data: string } & Situacao) => !y.motivo && !y.conflito && y.data >= hojeIso).length;
       }));
       if (vivo) setLivresPorTurno(r);
     }, 400);
@@ -160,14 +141,18 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
   const agendadoAtualMin = uc ? (agendadoUc.get(uc.id) ?? 0) * 60 : 0;
   const passaCh = ehAula && !!uc && depoisMin > chUcMin && depoisMin > agendadoAtualMin;
 
-  const selecionadasBloqueadas = [...(editando ? [dataUnica] : datas)]
-    .map((d) => motivos?.get(d)).filter((m): m is string => !!m);
+  // na edição, só pede nova confirmação de conflito se mexer em data, horário, instrutor ou turma
+  const mudouHorario = !item || item.data !== dataUnica || hhmm(item.hora_inicio) !== inicio || hhmm(item.hora_fim) !== fim
+    || item.instrutor_id !== instrutorId || item.turma_id !== (ehAula ? turmaId : null);
+  const selecionadas = [...(editando ? [dataUnica] : datas)].sort();
+  const selecionadasBloqueadas = selecionadas.map((d) => motivos?.get(d)?.motivo).filter((m): m is string => !!m);
+  const selecionadasConflito = selecionadas.map((d) => motivos?.get(d)?.conflito).filter((m): m is string => !!m);
 
   function alternar(d: string) {
     setDatas((s) => { const n2 = new Set(s); if (n2.has(d)) n2.delete(d); else n2.add(d); return n2; });
   }
   function alternarDiaSemana(_dow: number, lista: string[]) {
-    const livres = lista.filter((d) => !motivos?.get(d));
+    const livres = lista.filter((d) => !motivos?.get(d)?.motivo && !motivos?.get(d)?.conflito);
     setDatas((s) => {
       const n2 = new Set(s);
       const todasMarcadas = livres.every((d) => n2.has(d));
@@ -190,6 +175,7 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
     if (!editando && !datas.size) return setErro('Marque pelo menos uma data no calendário.');
     if (selecionadasBloqueadas.length) return setErro(selecionadasBloqueadas.slice(0, 3).join(' '));
     if (passaCh && !confirmaCh) return setErro('Confirme que o lançamento passa da carga horária da UC.');
+    if (selecionadasConflito.length && mudouHorario && !confirmaConflito) return setErro('Há conflito de horário: confirme para lançar assim mesmo.');
 
     const base = {
       tipo, hora_inicio: inicio, hora_fim: fim, instrutor_id: instrutorId,
@@ -249,23 +235,15 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
           </div>
 
           {fixoInstrutor ? null : (
-            <label className="campo">Instrutor
-              <select value={instrutorId} onChange={(e) => setInstrutorId(e.target.value)}>
-                <option value="" disabled>Escolha…</option>
-                {opcoesComDisponibilidade(instrutores.map((u) => ({ id: u.id, rotulo: u.nome })), instrutorId)}
-              </select>
-              {contagem(instrutores) && <span className="dica">{contagem(instrutores)}</span>}
-            </label>
+            <ListaEscolha rotulo="Instrutor" valor={instrutorId} onChange={setInstrutorId} situacao={ocupacao}
+                          itens={instrutores.map((u) => ({ id: u.id, nome: u.nome, cor: u.cor }))}
+                          resumo={resumoLista(instrutores)} />
           )}
 
           {ehAula && !fixoTurma && (
-            <label className="campo">Turma
-              <select value={turmaId} onChange={(e) => { setTurmaId(e.target.value); setUcId(''); }}>
-                <option value="" disabled>Escolha…</option>
-                {opcoesComDisponibilidade(turmas.map((t) => ({ id: t.id, rotulo: `${t.nome}${t.codigo ? ` — ${t.codigo}` : ''}` })), turmaId)}
-              </select>
-              {contagem(turmas) && <span className="dica">{contagem(turmas)}</span>}
-            </label>
+            <ListaEscolha rotulo="Turma" valor={turmaId} onChange={(id) => { setTurmaId(id); setUcId(''); }} situacao={ocupacao}
+                          itens={turmas.map((t) => ({ id: t.id, nome: t.nome, sub: t.codigo, cor: t.cor }))}
+                          resumo={resumoLista(turmas)} />
           )}
 
           {ehAula && (
@@ -362,7 +340,26 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
           Confirmo lançar além da carga horária da UC
         </label>
       )}
-      {editando && motivos?.get(dataUnica) && <p className="erro">{motivos.get(dataUnica)}</p>}
+      {selecionadasBloqueadas.length > 0 && (
+        <div className="alerta bloqueio">
+          <strong>Não dá para lançar {selecionadasBloqueadas.length === 1 ? 'nesta data' : `em ${selecionadasBloqueadas.length} datas`}:</strong>
+          <ul>{selecionadasBloqueadas.slice(0, 5).map((m, i) => <li key={i}>{m}</li>)}</ul>
+          {!editando && <span>Desmarque essas datas no calendário.</span>}
+        </div>
+      )}
+      {selecionadasConflito.length > 0 && (
+        <div className="alerta conflito">
+          <strong>⚠ Conflito de horário {selecionadasConflito.length === 1 ? 'nesta data' : `em ${selecionadasConflito.length} datas`}:</strong>
+          <ul>{selecionadasConflito.slice(0, 5).map((m, i) => <li key={i}>{m}</li>)}</ul>
+          {selecionadasConflito.length > 5 && <span>e mais {selecionadasConflito.length - 5}…</span>}
+          {mudouHorario ? (
+            <label className="check">
+              <input type="checkbox" checked={confirmaConflito} onChange={(e) => setConfirmaConflito(e.target.checked)} />
+              {editando ? 'Salvar mesmo assim' : 'Lançar mesmo assim'} (o conflito fica marcado em vermelho na agenda)
+            </label>
+          ) : <span>Este item já está em conflito. Mude o horário, a data ou a pessoa para resolver.</span>}
+        </div>
+      )}
       {erro && <p className="erro">{erro}</p>}
     </Modal>
   );

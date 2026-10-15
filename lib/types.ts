@@ -126,8 +126,8 @@ export const fmtHoras = (h: number) => fmtMin(Math.round(h * 60));
 export function mensagemErro(e: { message?: string; code?: string } | null | undefined, padrao = 'Não foi possível salvar.'): string {
   if (!e) return padrao;
   const msg = e.message ?? '';
-  if (msg.includes('itens_sem_choque_instrutor')) return 'O instrutor já tem outro compromisso nesse horário.';
-  if (msg.includes('itens_sem_choque_turma')) return 'A turma já tem aula nesse horário.';
+  // as travas de choque foram trocadas por aviso; se aparecerem, falta rodar supabase/manual/2026-10-15_remover_travas_de_choque.sql
+  if (msg.includes('itens_sem_choque')) return 'O banco ainda bloqueia choque de horário (falta rodar o SQL que remove as travas).';
   if (msg.includes('turmas_codigo_key')) return 'Já existe uma turma com esse código.';
   if (msg.includes('ucs_numero_unico')) return 'Já existe uma UC com esse número no curso.';
   if (e.code === '23503') return 'Não dá para apagar: há registros ligados a este item.';

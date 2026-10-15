@@ -6,6 +6,7 @@ import { MESES, addDays, ddmm, deIso, hhmm, iso, segundaDaSemana } from '@/lib/d
 import { indices, useCadastros } from './Contexto';
 
 interface ItemCarga { instrutor_id: string; data: string; hora_inicio: string; hora_fim: string; tipo: string; trabalho: boolean }
+interface ItemConflito { id: string; data: string; hora_inicio: string; hora_fim: string; tipo: string; titulo: string | null; instrutor_id: string; turma_id: string | null }
 interface Pendencia { id: string; data: string; hora_inicio: string; instrutor_id: string; turma_id: string; uc_id: string; material_ok: boolean; ptd_ok: boolean }
 
 /** Barra empilhada: realizado (cheio) + agendado futuro (claro) sobre o total. */
@@ -32,6 +33,7 @@ export default function Painel() {
   const [mes, setMes] = useState({ ano: hoje.getFullYear(), mes: hoje.getMonth() });
   const [carga, setCarga] = useState<ItemCarga[]>([]);
   const [pend, setPend] = useState<Pendencia[]>([]);
+  const [conflitos, setConflitos] = useState<{ item: ItemConflito; motivo: string }[]>([]);
 
   useEffect(() => {
     supabase.from('progresso').select('*').then(({ data }) => setProgresso((data ?? []) as Progresso[]));
@@ -39,6 +41,19 @@ export default function Painel() {
       .eq('tipo', 'aula').gte('data', iso(hoje)).lte('data', iso(addDays(hoje, 14)))
       .or('material_ok.eq.false,ptd_ok.eq.false').order('data').order('hora_inicio')
       .then(({ data }) => setPend(((data ?? []) as Pendencia[]).filter((p) => gestor || p.instrutor_id === cad.eu.id)));
+    // conflitos de horário já gravados nos próximos 60 dias
+    (async () => {
+      const { data: c } = await supabase.rpc('conflitos_periodo', { p_ini: iso(hoje), p_fim: iso(addDays(hoje, 60)) });
+      const lista = (c ?? []) as { item_id: string; motivo: string }[];
+      if (!lista.length) { setConflitos([]); return; }
+      const { data: its } = await supabase.from('itens').select('id,data,hora_inicio,hora_fim,tipo,titulo,instrutor_id,turma_id')
+        .in('id', lista.map((x) => x.item_id));
+      const porId = new Map(((its ?? []) as ItemConflito[]).map((i) => [i.id, i]));
+      setConflitos(lista.filter((x) => porId.has(x.item_id))
+        .map((x) => ({ item: porId.get(x.item_id)!, motivo: x.motivo }))
+        .filter((x) => gestor || x.item.instrutor_id === cad.eu.id)
+        .sort((a, b) => (a.item.data + a.item.hora_inicio).localeCompare(b.item.data + b.item.hora_inicio)));
+    })();
   }, [gestor, cad.eu.id]);
 
   useEffect(() => {
@@ -177,6 +192,25 @@ export default function Painel() {
               </div>
             );
           })}
+        </article>
+
+        <article className={`painel ${conflitos.length ? 'painel-alerta' : ''}`}>
+          <h3>{conflitos.length > 0 && '⚠ '}Conflitos de horário <span className="muted pequeno">(próximos 60 dias)</span></h3>
+          {!conflitos.length && <p className="muted">Nenhum conflito. ✓</p>}
+          <ul className="pendencias">
+            {conflitos.slice(0, 40).map(({ item: i, motivo }) => {
+              const t = i.turma_id ? idx.turma.get(i.turma_id) : undefined, u = idx.usuario.get(i.instrutor_id);
+              return (
+                <li key={i.id} className="conflito-linha">
+                  <span>
+                    <strong>{ddmm(deIso(i.data))}</strong> {hhmm(i.hora_inicio)}–{hhmm(i.hora_fim)} · {t?.nome ?? i.titulo}{gestor && ` · ${u?.nome}`}
+                    <small>{motivo}</small>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+          {conflitos.length > 40 && <p className="muted">e mais {conflitos.length - 40}…</p>}
         </article>
 
         <article className="painel">
