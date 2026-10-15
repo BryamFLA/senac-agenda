@@ -128,7 +128,9 @@ components/     Contexto.tsx (cadastros compartilhados), Modal.tsx (+ SeletorCor
                 conflito em vermelho) · AgendaColuna.tsx (uma agenda: grade, Material/PTD, lançamento/edição) · Grade.tsx (vários itens por célula)
                 FormItem.tsx (lançar/editar: aula|evento, mini calendário, CH da UC, avisos de conflito, apagar série)
                 ListaEscolha.tsx (lista de instrutores/turmas com ocupados em vermelho) · MiniCalendario.tsx
-                DetalheAula.tsx (visão do instrutor: elementos da UC) · Painel.tsx (andamento, carga, pendências)
+                DetalheAula.tsx (visão do instrutor: elementos da UC)
+                Painel.tsx (dashboard: filtros fixos + indicadores) · painel/ (Conflitos, Andamento, Fechamento, Carga,
+                Preparo, Matriz; dados.ts = cálculos; Partes.tsx = Secao/Kpi/Medidor/Selo; Dica.tsx = tooltip)
                 Cursos.tsx (+ ElementosUC, edição de UC) · ImportarPlano.tsx (PDF → IA → revisão) · Turmas.tsx · Pessoas.tsx
                 Filtros.tsx (barra de busca + filtros das telas de cadastro: Busca, Filtro, SITUACOES)
 lib/            supabase.ts, types.ts (tipos, TURNOS, CORES, minutos/fmtMin, mensagemErro), datas.ts,
@@ -142,7 +144,7 @@ docs/superpowers/      desenhos (specs/) e planos (plans/)
 ```
 
 ## Banco (schema `public`)
-### v1 (migrações `20261008172403_v1_schema`, `20261008172438_v1_importar_v0`, `20261015133617_v1_livres_no_horario`, `20261015135258_v1_conflitos_funcoes`, `20261015140134_v1_ocorrencias_periodo`)
+### v1 (migrações `20261008172403_v1_schema`, `20261008172438_v1_importar_v0`, `20261015133617_v1_livres_no_horario`, `20261015135258_v1_conflitos_funcoes`, `20261015140134_v1_ocorrencias_periodo`, `20261015163907_v1_andamento_view`)
 - **`usuarios`** — `id` = `auth.users.id`, `email`, `nome`, `papel` (`admin` | `tept` | `instrutor`), `leciona` (aparece como
   instrutor), `cor` (pinta as aulas na agenda da turma), `ativo`. Gestor = admin ou tept. Bryam = admin + leciona.
   Novo acesso: pela tela Pessoas (Edge Function `usuarios`); só admin cria/edita admin.
@@ -154,8 +156,9 @@ docs/superpowers/      desenhos (specs/) e planos (plans/)
 - **`itens`** — cada item da agenda: `tipo` aula|evento, `data`, `hora_inicio`/`hora_fim` (obrigatórios), `turno` (coluna
   gerada pelo início: <12h M, <18h T, senão N), `periodo` (tsrange gerado), `instrutor_id`, `turma_id`+`uc_id` (aula),
   `titulo`+`cor`+`trabalho` (evento), `observacao`, `material_ok`, `ptd_ok`, `serie_id` (lançados juntos), `origem` v1|v0.
-- **`historico`** — auditoria de `itens` (trigger `itens_audit`). View **`progresso`** (security_invoker): horas agendadas e
-  realizadas por turma × UC.
+- **`historico`** — auditoria de `itens` (trigger `itens_audit`). Views (security_invoker): **`progresso`** (horas por
+  turma × UC) e **`andamento`** (turma × UC × instrutor: horas, primeira/última/próxima aula, aulas futuras, material e PTD
+  pendentes) — base do painel.
 - **Regras no banco:** trigger `itens_validar` (coerência da aula, mensagem em português) e constraint trigger
   **diferido** `itens_jornada` (10 h/dia pela **união** dos horários e 11 h de interjornada, só itens `trabalho`) —
   esses **bloqueiam**. Choque de horário **não bloqueia**: `private.motivo_conflito()` só gera o aviso.
@@ -189,6 +192,11 @@ Depois da virada podem virar somente leitura; não apagar sem o Bryam pedir.
 - Telas de cadastro: largura total, barra de filtros no topo (busca + filtros + contador). Cursos: eixo, segmento,
   situação. Turmas: curso, situação. Pessoas: papel, dá aula, situação.
 - CSS: a classe `.marca` é do logo; os botões Material/PTD usam `.marcacao`.
+- Painel (dashboard): segue a skill `dataviz` — filtros numa linha fixa no topo valendo para todas as seções; cores com
+  função única (azul SENAC realizado, `#86b6ef` agendado, trilho cinza; rampas azuis ordinais a partir do degrau 250,
+  validadas com o script da skill; status bom/atenção/sério/crítico só com ícone + texto); tooltip em toda marca e
+  "Ver tabela" nos gráficos. Seções: conflitos (destaque), andamento por turma/UC, fechamento (linha do tempo + previsão),
+  carga (mapa de calor instrutor × dia), material/PTD, matriz instrutor × turma.
 - Comparar agendas: o botão + (canto inferior direito) abre a 2ª agenda; o filtro é um só e vale para a agenda **ativa**
   (contorno azul, número 1/2); o mês é o mesmo nas duas; gravar em uma recarrega as duas. Comparando, o menu lateral
   recolhe (`.app:has(.agenda-layout.comparando)`) e a grade fica compacta (`.semanas.compacto`).

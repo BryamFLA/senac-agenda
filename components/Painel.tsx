@@ -1,238 +1,200 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Progresso, eGestor, fmtHoras, fmtMin, minutos } from '@/lib/types';
-import { MESES, addDays, ddmm, deIso, hhmm, iso, segundaDaSemana } from '@/lib/datas';
-import { indices, useCadastros } from './Contexto';
+import { eGestor } from '@/lib/types';
+import { MESES, addDays, iso } from '@/lib/datas';
+import { useCadastros } from './Contexto';
+import { ProvedorDica } from './painel/Dica';
+import { ItemPainel, LinhaAndamento, Ocorrencia, fmtH, pct, resumirTurmas } from './painel/dados';
+import { Kpi } from './painel/Partes';
+import Conflitos, { Conflito } from './painel/Conflitos';
+import Andamento from './painel/Andamento';
+import Fechamento from './painel/Fechamento';
+import Carga from './painel/Carga';
+import Preparo from './painel/Preparo';
+import Matriz from './painel/Matriz';
 
-interface ItemCarga { instrutor_id: string; data: string; hora_inicio: string; hora_fim: string; tipo: string; trabalho: boolean }
-interface ItemConflito { id: string; data: string; hora_inicio: string; hora_fim: string; tipo: string; titulo: string | null; instrutor_id: string; turma_id: string | null }
-interface Pendencia { id: string; data: string; hora_inicio: string; instrutor_id: string; turma_id: string; uc_id: string; material_ok: boolean; ptd_ok: boolean }
-
-/** Barra empilhada: realizado (cheio) + agendado futuro (claro) sobre o total. */
-function Barra({ realizado, agendado, total, cor }: { realizado: number; agendado: number; total: number; cor: string }) {
-  const max = Math.max(total, agendado, 0.0001);
-  const pr = (realizado / max) * 100, pa = (Math.max(agendado - realizado, 0) / max) * 100;
-  return (
-    <div className="barra-ch" style={{ '--c': cor } as React.CSSProperties} role="img"
-         aria-label={`Realizado ${fmtHoras(realizado)}, agendado ${fmtHoras(agendado)} de ${fmtHoras(total)}`}>
-      <span className="real" style={{ width: `${pr}%` }} />
-      <span className="agend" style={{ width: `${pa}%` }} />
-      {agendado > total && <span className="excesso" style={{ left: `${(total / max) * 100}%` }} />}
-    </div>
-  );
-}
+const CAMPOS_ITEM = 'id,tipo,data,hora_inicio,hora_fim,instrutor_id,turma_id,uc_id,titulo,trabalho,material_ok,ptd_ok';
+const DIAS_CONFLITO = 60;
+const DIAS_PREPARO = 14;
 
 export default function Painel() {
   const cad = useCadastros();
-  const idx = useMemo(() => indices(cad), [cad]);
   const gestor = eGestor(cad.eu);
   const hoje = new Date();
-  const [progresso, setProgresso] = useState<Progresso[]>([]);
-  const [turmaSel, setTurmaSel] = useState<string>('');
+  const hojeIso = iso(hoje);
+
+  // filtros: valem para todas as seções
+  const [fInstrutor, setFInstrutor] = useState(gestor ? '' : cad.eu.id);
+  const [fTurma, setFTurma] = useState('');
+  const [fCurso, setFCurso] = useState('');
   const [mes, setMes] = useState({ ano: hoje.getFullYear(), mes: hoje.getMonth() });
-  const [carga, setCarga] = useState<ItemCarga[]>([]);
-  const [pend, setPend] = useState<Pendencia[]>([]);
-  const [conflitos, setConflitos] = useState<{ item: ItemConflito; motivo: string }[]>([]);
 
+  const [andamento, setAndamento] = useState<LinhaAndamento[]>([]);
+  const [proximas, setProximas] = useState<ItemPainel[]>([]);
+  const [conflitos, setConflitos] = useState<Conflito[]>([]);
+  const [itensMes, setItensMes] = useState<ItemPainel[]>([]);
+  const [conflitosMes, setConflitosMes] = useState<Set<string>>(new Set());
+  const [carregando, setCarregando] = useState(true);
+
+  // dados que não dependem do mês escolhido
   useEffect(() => {
-    supabase.from('progresso').select('*').then(({ data }) => setProgresso((data ?? []) as Progresso[]));
-    supabase.from('itens').select('id,data,hora_inicio,instrutor_id,turma_id,uc_id,material_ok,ptd_ok')
-      .eq('tipo', 'aula').gte('data', iso(hoje)).lte('data', iso(addDays(hoje, 14)))
-      .or('material_ok.eq.false,ptd_ok.eq.false').order('data').order('hora_inicio')
-      .then(({ data }) => setPend(((data ?? []) as Pendencia[]).filter((p) => gestor || p.instrutor_id === cad.eu.id)));
-    // conflitos de horário já gravados nos próximos 60 dias
+    let vivo = true;
     (async () => {
-      const { data: c } = await supabase.rpc('conflitos_periodo', { p_ini: iso(hoje), p_fim: iso(addDays(hoje, 60)) });
-      const lista = (c ?? []) as { item_id: string; motivo: string }[];
-      if (!lista.length) { setConflitos([]); return; }
-      const { data: its } = await supabase.from('itens').select('id,data,hora_inicio,hora_fim,tipo,titulo,instrutor_id,turma_id')
-        .in('id', lista.map((x) => x.item_id));
-      const porId = new Map(((its ?? []) as ItemConflito[]).map((i) => [i.id, i]));
-      setConflitos(lista.filter((x) => porId.has(x.item_id))
-        .map((x) => ({ item: porId.get(x.item_id)!, motivo: x.motivo }))
-        .filter((x) => gestor || x.item.instrutor_id === cad.eu.id)
-        .sort((a, b) => (a.item.data + a.item.hora_inicio).localeCompare(b.item.data + b.item.hora_inicio)));
-    })();
-  }, [gestor, cad.eu.id]);
-
-  useEffect(() => {
-    const ini = new Date(mes.ano, mes.mes, 1), fim = new Date(mes.ano, mes.mes + 1, 0);
-    let q = supabase.from('itens').select('instrutor_id,data,hora_inicio,hora_fim,tipo,trabalho')
-      .gte('data', iso(ini)).lte('data', iso(fim));
-    if (!gestor) q = q.eq('instrutor_id', cad.eu.id);
-    q.then(({ data }) => setCarga((data ?? []) as ItemCarga[]));
-  }, [mes, gestor, cad.eu.id]);
-
-  // turmas visíveis: gestor vê todas as ativas; instrutor, as que aparecem no progresso (RLS)
-  const turmas = useMemo(() => {
-    const comAula = new Set(progresso.map((p) => p.turma_id));
-    return cad.turmas.filter((t) => (gestor ? t.ativo || comAula.has(t.id) : comAula.has(t.id)))
-      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-  }, [cad.turmas, progresso, gestor]);
-  useEffect(() => { if (!turmaSel && turmas.length) setTurmaSel(turmas[0].id); }, [turmas, turmaSel]);
-
-  const resumoTurma = (turmaId: string) => {
-    const t = idx.turma.get(turmaId)!;
-    const ucs = cad.ucs.filter((u) => u.curso_id === t.curso_id).sort((a, b) => a.numero - b.numero);
-    const linhas = ucs.map((u) => {
-      const p = progresso.find((x) => x.turma_id === turmaId && x.uc_id === u.id);
-      return { uc: u, ch: Number(u.ch), agendado: Number(p?.horas_agendadas ?? 0), realizado: Number(p?.horas_realizadas ?? 0) };
-    });
-    const tot = linhas.reduce((s, l) => ({ ch: s.ch + l.ch, agendado: s.agendado + l.agendado, realizado: s.realizado + l.realizado }), { ch: 0, agendado: 0, realizado: 0 });
-    return { turma: t, linhas, tot };
-  };
-  const sel = turmaSel && idx.turma.has(turmaSel) ? resumoTurma(turmaSel) : null;
-
-  // carga do mês por instrutor
-  const porInstrutor = useMemo(() => {
-    const m = new Map<string, { trabalho: number; aulas: number; eventos: number; dias: Map<string, number>; semanas: Map<string, number> }>();
-    for (const i of carga) {
-      const r = m.get(i.instrutor_id) ?? { trabalho: 0, aulas: 0, eventos: 0, dias: new Map(), semanas: new Map() };
-      const min = minutos(i.hora_inicio, i.hora_fim);
-      if (i.tipo === 'aula') r.aulas += min; else if (i.trabalho) r.eventos += min;
-      if (i.trabalho) {
-        r.trabalho += min;
-        r.dias.set(i.data, (r.dias.get(i.data) ?? 0) + min);
-        const sem = iso(segundaDaSemana(deIso(i.data)));
-        r.semanas.set(sem, (r.semanas.get(sem) ?? 0) + min);
+      setCarregando(true);
+      const [a, p, oc] = await Promise.all([
+        supabase.from('andamento').select('*'),
+        supabase.from('itens').select(CAMPOS_ITEM).eq('tipo', 'aula')
+          .gte('data', hojeIso).lte('data', iso(addDays(hoje, DIAS_PREPARO))).order('data').order('hora_inicio'),
+        supabase.rpc('ocorrencias_periodo', { p_ini: hojeIso, p_fim: iso(addDays(hoje, DIAS_CONFLITO)) }),
+      ]);
+      const ocs = (oc.data ?? []) as Ocorrencia[];
+      let itensConf: ItemPainel[] = [];
+      if (ocs.length) {
+        const r = await supabase.from('itens').select(CAMPOS_ITEM).in('id', ocs.map((o) => o.item_id));
+        itensConf = (r.data ?? []) as ItemPainel[];
       }
-      m.set(i.instrutor_id, r);
-    }
-    return [...m.entries()].map(([id, r]) => ({ id, ...r })).sort((a, b) => b.trabalho - a.trabalho);
-  }, [carga]);
-  const maxSemana = Math.max(1, ...porInstrutor.flatMap((r) => [...r.semanas.values()]));
+      if (!vivo) return;
+      const porId = new Map(itensConf.map((i) => [i.id, i]));
+      setAndamento((a.data ?? []) as LinhaAndamento[]);
+      setProximas((p.data ?? []) as ItemPainel[]);
+      setConflitos(ocs.filter((o) => porId.has(o.item_id)).map((o) => ({ item: porId.get(o.item_id)!, motivo: o.motivo })));
+      setCarregando(false);
+    })();
+    return () => { vivo = false; };
+  }, [hojeIso]);
 
-  function navegar(k: number) {
-    const d = new Date(mes.ano, mes.mes + k, 1);
-    setMes({ ano: d.getFullYear(), mes: d.getMonth() });
-  }
+  // itens e conflitos do mês da carga
+  useEffect(() => {
+    let vivo = true;
+    const ini = iso(new Date(mes.ano, mes.mes, 1)), fim = iso(new Date(mes.ano, mes.mes + 1, 0));
+    Promise.all([
+      supabase.from('itens').select(CAMPOS_ITEM).gte('data', ini).lte('data', fim),
+      supabase.rpc('ocorrencias_periodo', { p_ini: ini, p_fim: fim }),
+    ]).then(([i, o]) => {
+      if (!vivo) return;
+      setItensMes((i.data ?? []) as ItemPainel[]);
+      setConflitosMes(new Set(((o.data ?? []) as Ocorrencia[]).map((x) => x.item_id)));
+    });
+    return () => { vivo = false; };
+  }, [mes]);
+
+  const turmaPor = useMemo(() => new Map(cad.turmas.map((t) => [t.id, t])), [cad.turmas]);
+  const doCurso = (turmaId: string | null) => !fCurso || (!!turmaId && turmaPor.get(turmaId)?.curso_id === fCurso);
+
+  // turmas no escopo: ativas (ou com aulas visíveis), respeitando curso/turma/instrutor
+  const resumos = useMemo(() => {
+    const comAula = new Set(andamento.map((l) => l.turma_id));
+    const base = cad.turmas.filter((t) => (gestor ? t.ativo || comAula.has(t.id) : comAula.has(t.id)));
+    return resumirTurmas(base, cad.cursos, cad.ucs, andamento)
+      .filter((r) => !fTurma || r.turma.id === fTurma)
+      .filter((r) => !fCurso || r.turma.curso_id === fCurso)
+      .filter((r) => !fInstrutor || r.instrutores.has(fInstrutor))
+      .sort((a, b) => (a.turma.codigo ?? a.turma.nome).localeCompare(b.turma.codigo ?? b.turma.nome));
+  }, [cad.turmas, cad.cursos, cad.ucs, andamento, gestor, fTurma, fCurso, fInstrutor]);
+  const turmasEscopo = new Set(resumos.map((r) => r.turma.id));
+
+  const instrutoresEscopo = cad.usuarios.filter((u) => u.leciona && u.ativo)
+    .filter((u) => (fInstrutor ? u.id === fInstrutor : !(fTurma || fCurso) || resumos.some((r) => r.instrutores.has(u.id))))
+    .filter((u) => gestor || u.id === cad.eu.id)
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+
+  const noEscopo = (i: ItemPainel) =>
+    (!fInstrutor || i.instrutor_id === fInstrutor) && (!fTurma || i.turma_id === fTurma) && doCurso(i.turma_id)
+    && (gestor || i.instrutor_id === cad.eu.id);
+  const conflitosF = conflitos.filter((c) => noEscopo(c.item));
+  const proximasF = proximas.filter(noEscopo);
+  const andamentoF = andamento.filter((l) => turmasEscopo.has(l.turma_id) && (!fInstrutor || l.instrutor_id === fInstrutor));
+
+  // indicadores
+  const tot = resumos.reduce((s, r) => ({ ch: s.ch + r.ch, ag: s.ag + r.agendado, re: s.re + r.realizado, falta: s.falta + r.aLancar }),
+    { ch: 0, ag: 0, re: 0, falta: 0 });
+  const semana = proximasF.filter((a) => a.data <= iso(addDays(hoje, 7))).length;
+  const matOk = proximasF.filter((a) => a.material_ok).length, ptdOk = proximasF.filter((a) => a.ptd_ok).length;
+  const concluidas = resumos.filter((r) => r.situacao.chave === 'concluida').length;
+  const atrasadas = resumos.filter((r) => r.situacao.chave === 'atrasada').length;
+
+  const filtrando = !!(fTurma || fCurso || (gestor && fInstrutor));
+  const navegar = (k: number) => { const d = new Date(mes.ano, mes.mes + k, 1); setMes({ ano: d.getFullYear(), mes: d.getMonth() }); };
+  const turmasFiltro = cad.turmas.filter((t) => (gestor ? t.ativo : andamento.some((l) => l.turma_id === t.id)))
+    .filter((t) => !fCurso || t.curso_id === fCurso)
+    .sort((a, b) => (a.codigo ?? a.nome).localeCompare(b.codigo ?? b.nome));
 
   return (
-    <section className="pagina">
-      <header className="pagina-topo">
-        <div>
-          <h1>Painel</h1>
-          <p className="muted">Andamento das UCs e carga horária dos instrutores. Horas em tempo de relógio.</p>
-        </div>
-      </header>
-
-      <div className="paineis">
-        <article className="painel">
-          <div className="secao-topo">
-            <h3>Andamento da turma</h3>
-            <select value={turmaSel} onChange={(e) => setTurmaSel(e.target.value)} aria-label="Turma">
-              {!turmas.length && <option value="">Nenhuma turma</option>}
-              {turmas.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
-            </select>
+    <ProvedorDica>
+      <section className={`pagina painel-pagina ${carregando ? 'carregando' : ''}`}>
+        <header className="pagina-topo">
+          <div>
+            <h1>Painel</h1>
+            <p className="muted">Visão geral de turmas, agendas e instrutores. Horas em tempo de relógio; “realizado” = aulas já terminadas.</p>
           </div>
-          {sel && (
-            <>
-              <div className="total-turma">
-                <Barra realizado={sel.tot.realizado} agendado={sel.tot.agendado} total={sel.tot.ch} cor={sel.turma.cor} />
-                <p className="muted">
-                  Realizado <strong>{fmtHoras(sel.tot.realizado)}</strong> · agendado {fmtHoras(sel.tot.agendado)} de {fmtHoras(sel.tot.ch)}
-                  {' '}({sel.tot.ch ? Math.round((sel.tot.realizado / sel.tot.ch) * 100) : 0}% concluído)
-                  {sel.tot.ch > sel.tot.agendado && ` · faltam lançar ${fmtHoras(sel.tot.ch - sel.tot.agendado)}`}
-                </p>
-              </div>
-              <ul className="lista-ch">
-                {sel.linhas.map((l) => (
-                  <li key={l.uc.id}>
-                    <div className="lista-ch-topo">
-                      <span><strong>UC{l.uc.numero}</strong> {l.uc.nome}</span>
-                      <span className={l.agendado > l.ch ? 'erro' : 'muted'}>
-                        {fmtHoras(l.realizado)} / {fmtHoras(l.agendado)} / {fmtHoras(l.ch)}
-                      </span>
-                    </div>
-                    <Barra realizado={l.realizado} agendado={l.agendado} total={l.ch} cor={sel.turma.cor} />
-                    <span className="muted pequeno">
-                      {l.agendado >= l.ch ? (l.agendado > l.ch ? `passou ${fmtHoras(l.agendado - l.ch)} da CH` : 'CH toda agendada')
-                        : `faltam lançar ${fmtHoras(l.ch - l.agendado)}`}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <p className="legenda"><i className="real" /> realizado <i className="agend" /> agendado <i className="falta" /> a lançar</p>
-            </>
-          )}
-        </article>
+        </header>
 
-        <article className="painel">
-          <div className="secao-topo">
-            <h3>Carga dos instrutores</h3>
+        {/* filtros: uma linha, fixa no topo, valem para todas as seções abaixo */}
+        <div className="painel-filtros" role="group" aria-label="Filtros do painel">
+          {gestor && (
+            <label className="filtro-select"><span>Instrutor</span>
+              <select value={fInstrutor} onChange={(e) => setFInstrutor(e.target.value)}>
+                <option value="">Todos</option>
+                {cad.usuarios.filter((u) => u.leciona && u.ativo).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+                  .map((u) => <option key={u.id} value={u.id}>{u.nome}</option>)}
+              </select>
+            </label>
+          )}
+          <label className="filtro-select"><span>Curso</span>
+            <select value={fCurso} onChange={(e) => { setFCurso(e.target.value); setFTurma(''); }}>
+              <option value="">Todos</option>
+              {cad.cursos.filter((c) => c.ativo).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </select>
+          </label>
+          <label className="filtro-select"><span>Turma</span>
+            <select value={fTurma} onChange={(e) => setFTurma(e.target.value)}>
+              <option value="">Todas</option>
+              {turmasFiltro.map((t) => <option key={t.id} value={t.id}>{t.codigo ?? t.nome}</option>)}
+            </select>
+          </label>
+          <div className="filtro-select"><span>Mês da carga</span>
             <div className="mes pequeno">
               <button className="icone pequeno" onClick={() => navegar(-1)} aria-label="Mês anterior">‹</button>
               <strong>{MESES[mes.mes]} {mes.ano}</strong>
               <button className="icone pequeno" onClick={() => navegar(1)} aria-label="Próximo mês">›</button>
             </div>
           </div>
-          {!porInstrutor.length && <p className="muted">Nada lançado neste mês.</p>}
-          {porInstrutor.map((r) => {
-            const u = idx.usuario.get(r.id);
-            const diasCheios = [...r.dias.values()].filter((m) => m >= 9 * 60).length;
-            return (
-              <div key={r.id} className="carga">
-                <div className="lista-ch-topo">
-                  <span><span className="bolinha-inline" style={{ background: u?.cor }} /> <strong>{u?.nome ?? '—'}</strong></span>
-                  <span><strong>{fmtMin(r.trabalho)}</strong> <span className="muted">no mês</span></span>
-                </div>
-                <p className="muted pequeno">
-                  Aulas {fmtMin(r.aulas)} · eventos {fmtMin(r.eventos)} · {r.dias.size} dias com trabalho
-                  {diasCheios > 0 && <span className="erro"> · {diasCheios} dia(s) com 9 h ou mais</span>}
-                </p>
-                <div className="semanas-ch">
-                  {[...r.semanas.entries()].sort().map(([sem, min]) => (
-                    <div key={sem} className="semana-ch" title={`Semana de ${ddmm(deIso(sem))}: ${fmtMin(min)}`}>
-                      <span style={{ height: `${(min / maxSemana) * 100}%`, background: u?.cor }} />
-                      <small>{ddmm(deIso(sem))}</small>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </article>
+          {filtrando && (
+            <button type="button" className="link limpar-filtros"
+                    onClick={() => { setFTurma(''); setFCurso(''); if (gestor) setFInstrutor(''); }}>Limpar filtros</button>
+          )}
+          <nav className="painel-atalhos" aria-label="Ir para a seção">
+            <a href="#conflitos">Conflitos</a><a href="#andamento">Andamento</a><a href="#fechamento">Fechamento</a>
+            <a href="#carga">Carga</a><a href="#preparo">Preparo</a><a href="#matriz">Matriz</a>
+          </nav>
+        </div>
 
-        <article className={`painel ${conflitos.length ? 'painel-alerta' : ''}`}>
-          <h3>{conflitos.length > 0 && '⚠ '}Conflitos de horário <span className="muted pequeno">(próximos 60 dias)</span></h3>
-          {!conflitos.length && <p className="muted">Nenhum conflito. ✓</p>}
-          <ul className="pendencias">
-            {conflitos.slice(0, 40).map(({ item: i, motivo }) => {
-              const t = i.turma_id ? idx.turma.get(i.turma_id) : undefined, u = idx.usuario.get(i.instrutor_id);
-              return (
-                <li key={i.id} className="conflito-linha">
-                  <span>
-                    <strong>{ddmm(deIso(i.data))}</strong> {hhmm(i.hora_inicio)}–{hhmm(i.hora_fim)} · {t?.nome ?? i.titulo}{gestor && ` · ${u?.nome}`}
-                    <small>{motivo}</small>
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-          {conflitos.length > 40 && <p className="muted">e mais {conflitos.length - 40}…</p>}
-        </article>
+        <div className="kpis">
+          <Kpi rotulo="Conflitos de horário" status={conflitosF.length ? 'critico' : 'bom'} href="#conflitos"
+               valor={conflitosF.length} complemento={conflitosF.length ? `nos próximos ${DIAS_CONFLITO} dias` : 'nenhum à vista'} />
+          <Kpi rotulo="Concluído das turmas" valor={`${pct(tot.re, tot.ch)}%`}
+               complemento={`${fmtH(tot.re)} de ${fmtH(tot.ch)} · ${resumos.length} turma(s)`} />
+          <Kpi rotulo="Agendado" valor={`${pct(tot.ag, tot.ch)}%`} complemento={`${fmtH(tot.ag)} lançadas na agenda`} />
+          <Kpi rotulo="Falta lançar" status={tot.falta > 0 ? 'serio' : 'bom'} valor={fmtH(tot.falta)}
+               complemento={tot.falta > 0 ? `para fechar ${resumos.filter((r) => r.aLancar > 0).length} turma(s)` : 'toda a CH está agendada'} />
+          <Kpi rotulo="Turmas" valor={resumos.length}
+               complemento={`${concluidas} concluída(s)${atrasadas ? ` · ${atrasadas} além do fim previsto` : ''}`}
+               status={atrasadas ? 'critico' : undefined} />
+          <Kpi rotulo="Aulas nos próximos 7 dias" valor={semana} complemento={`${proximasF.length} em ${DIAS_PREPARO} dias`} />
+          <Kpi rotulo="Material pronto" status={matOk < proximasF.length ? 'serio' : 'bom'} href="#preparo"
+               valor={`${pct(matOk, proximasF.length)}%`} complemento={`${matOk} de ${proximasF.length} aulas (${DIAS_PREPARO} dias)`} />
+          <Kpi rotulo="PTD pronto" status={ptdOk < proximasF.length ? 'serio' : 'bom'} href="#preparo"
+               valor={`${pct(ptdOk, proximasF.length)}%`} complemento={`${ptdOk} de ${proximasF.length} aulas (${DIAS_PREPARO} dias)`} />
+        </div>
 
-        <article className="painel">
-          <h3>Material e PTD pendentes <span className="muted pequeno">(próximos 14 dias)</span></h3>
-          {!pend.length && <p className="muted">Nenhuma pendência. 🎉</p>}
-          <ul className="pendencias">
-            {pend.slice(0, 40).map((p) => {
-              const t = idx.turma.get(p.turma_id), uc = idx.uc.get(p.uc_id), u = idx.usuario.get(p.instrutor_id);
-              return (
-                <li key={p.id}>
-                  <span><strong>{ddmm(deIso(p.data))}</strong> {hhmm(p.hora_inicio)} · {t?.nome} · UC{uc?.numero}{gestor && ` · ${u?.nome}`}</span>
-                  <span>
-                    {!p.material_ok && <span className="selo-item">material</span>}
-                    {!p.ptd_ok && <span className="selo-item">PTD</span>}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-          {pend.length > 40 && <p className="muted">e mais {pend.length - 40}…</p>}
-        </article>
-      </div>
-    </section>
+        <Conflitos lista={conflitosF} usuarios={cad.usuarios} turmas={cad.turmas} dias={DIAS_CONFLITO} />
+        <Andamento resumos={resumos} usuarios={cad.usuarios} destaqueInstrutor={fInstrutor} />
+        <Fechamento resumos={resumos} />
+        <Carga instrutores={instrutoresEscopo} itens={itensMes} conflitos={conflitosMes} ano={mes.ano} mes={mes.mes} />
+        <Preparo aulas={proximasF} dias={DIAS_PREPARO} usuarios={cad.usuarios} turmas={cad.turmas} ucs={cad.ucs} />
+        <Matriz linhas={andamentoF} instrutores={instrutoresEscopo} turmas={resumos.map((r) => r.turma)} />
+      </section>
+    </ProvedorDica>
   );
 }
