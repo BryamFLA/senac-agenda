@@ -2,11 +2,9 @@
 
 Contexto para agentes (Claude Code) trabalharem neste repositório. Leia inteiro antes de mudar algo.
 
-> **Momento do projeto (08/10/2026):** a **v1** (distribuição de aulas e carga horária para a unidade inteira, com
-> interfaces de TEPTs e Instrutores) está **implementada na branch `v1-desenho`**. O **banco de produção já está no modelo
-> da v1** (tabelas novas + dados da v0 importados); as tabelas da v0 continuam lá, intactas. O site em
-> `agenda.bryam.com.br` ainda é a **v0** até o merge na `main` (virada decidida pelo Bryam).
-> Desenho: `docs/superpowers/specs/2026-10-08-v1-design.md`.
+> **Momento do projeto (15/10/2026):** a **v1** (distribuição de aulas e carga horária para a unidade inteira, com
+> interfaces de TEPTs e Instrutores) está **em produção** em `agenda.bryam.com.br` (PR #2 mesclado na `main`).
+> As tabelas da v0 continuam no banco, intactas, só como legado. Desenho: `docs/superpowers/specs/2026-10-08-v1-design.md`.
 
 ## Quem e para quê
 - **Dono:** Bryam Assolini, instrutor de TI no SENAC Francisco Beltrão (PR), unidade UEPT-16.
@@ -251,11 +249,11 @@ npm run build      # gera out/
 - [x] Testado no navegador (Edge + Playwright, dev server) com usuário de teste: cadastros, lançamento, bloqueios,
       instrutor, criação de acesso, importação até a chamada da IA
 - [ ] `ANTHROPIC_API_KEY` nas secrets (sem ela o leitor de PDF responde "não configurada"); primeira leitura real de um plano
-- [ ] Merge na `main` = virada do site para as coordenadoras
+- [x] Merge na `main` (15/10/2026) — v1 no ar para as coordenadoras
 
 ## Próximas etapas (em ordem)
-1. Bryam cadastra `ANTHROPIC_API_KEY`, testa a importação de um plano e revisa a v1 no preview do PR.
-2. Merge na `main` (virada). Avisar as coordenadoras: eventos "v0" são a agenda antiga e podem ser convertidos em aula.
+1. Bryam cadastra `ANTHROPIC_API_KEY` e testa a importação de um plano de curso real.
+2. Avisar as coordenadoras: eventos "v0" são a agenda antiga e podem ser convertidos em aula; cadastrar cursos e turmas reais.
 3. Decidir o destino do espelho no Google Calendar (hoje lê a tabela `agenda` da v0).
 
 ## Decisões já tomadas (out/2026)
@@ -275,9 +273,8 @@ npm run build      # gera out/
 - Leitor de plano de curso aceita só PDF.
 
 ## Pendências para confirmar com o Bryam
-- Dados de teste ainda no banco de produção (a limpeza foi recusada na sessão de 08/10): usuários
-  `teste.v1@senac-agenda.test` e `teste.inst@senac-agenda.test`, curso "TESTE Curso v1", turma "TESTE Turma v1" e 3 aulas
-  em mar/2027. Apagar quando o Bryam autorizar (itens → historico desses itens → turma → curso → usuarios → auth.users).
+- Limpeza dos dados de teste: SQL em `supabase/manual/2026-10-15_limpar_dados_de_teste.sql` (rodado à mão pelo Bryam;
+  conferir se não sobrou usuário `@senac-agenda.test` nem curso/turma "TESTE").
 
 ## Contexto externo
 - Arquivos do SENAC: `D:\SENAC` (clone do OneDrive institucional; estrutura Curso → Turma → UC).
