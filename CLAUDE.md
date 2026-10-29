@@ -96,7 +96,11 @@ Padrão nacional do Senac (mesma estrutura em todos os cursos). Exemplo analisad
   Téc. Inteligência Artificial, Auxiliar de Confeitaria, Assistente Adm).
 - Entrada é **sempre PDF** (o `.docx` do Assistente de TI será convertido antes; o leitor não aceita Word).
 
-### Chamada (29/10/2026)
+### Chamada (29/10/2026) — **ESCONDIDA nesta versão**
+> O Bryam decidiu que a chamada **não entra agora**. Tudo continua no código e no banco, mas a interface está desligada
+> pela chave **`CHAMADA_ATIVA = false`** em `lib/types.ts` (some o menu Alunos, a seção de alunos na turma e o botão
+> Chamada no cartão). Para religar: trocar para `true`. Não apagar as tabelas `alunos`, `matriculas`, `presencas`.
+
 - Cadastro de **alunos** (tela Alunos, só TEPTs) e alunos da turma no **cadastro da turma** (busca + "cadastrar novo";
   cada mudança grava na hora; aluno com chamada não sai da turma, vira "Desligado").
 - Botão **"Importar lista de frequência (PDF)"** na turma: lê a consulta **"Usuários AD"** do sistema do Senac

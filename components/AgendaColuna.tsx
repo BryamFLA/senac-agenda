@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { ITEM_CAMPOS, Item, Turno, eGestor, mensagemErro } from '@/lib/types';
+import { CHAMADA_ATIVA, ITEM_CAMPOS, Item, Turno, eGestor, mensagemErro } from '@/lib/types';
 import { deIso, iso } from '@/lib/datas';
 import { indices, useCadastros } from './Contexto';
 import Grade, { Cartao } from './Grade';
@@ -52,7 +52,7 @@ export default function AgendaColuna({ painel, numero, ativo, comparando, semana
     setErro(null);
     setItens(data as Item[]);
     const aulas = (data as Item[]).filter((i) => i.tipo === 'aula').map((i) => i.id);
-    const ch = aulas.length ? await supabase.from('chamadas').select('item_id').in('item_id', aulas) : { data: [] };
+    const ch = CHAMADA_ATIVA && aulas.length ? await supabase.from('chamadas').select('item_id').in('item_id', aulas) : { data: [] };
     setComChamada(new Set((ch.data ?? []).map((r) => r.item_id as string)));
   }, [alvo, modo, semanas]);
 
@@ -99,12 +99,15 @@ export default function AgendaColuna({ painel, numero, ativo, comparando, semana
         <span aria-hidden="true">{i.ptd_ok ? '✓' : '○'}</span> <span className="marcacao-txt">PTD</span>
         <span className="marcacao-curto" aria-hidden="true">P</span>
       </button>
+      {/* chamada escondida nesta versão: ver CHAMADA_ATIVA em lib/types.ts */}
+      {CHAMADA_ATIVA && (
       <button type="button" className={`marcacao ${feita ? 'ok' : pendente ? 'pendente' : futura ? 'futura' : ''}`} disabled={futura}
               onClick={() => setChamada(i)}
               title={futura ? 'A chamada abre no dia da aula' : feita ? 'Chamada feita: clique para ver ou corrigir' : 'Fazer a chamada'}>
         <span aria-hidden="true">{feita ? '✓' : '○'}</span> <span className="marcacao-txt">Chamada</span>
         <span className="marcacao-curto" aria-hidden="true">C</span>
       </button>
+      )}
     </>
     );
   };

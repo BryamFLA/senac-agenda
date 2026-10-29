@@ -68,6 +68,10 @@ export interface Item {
   origem: 'v1' | 'v0';
 }
 
+// Chamada e cadastro de alunos ficam FORA desta versão (decisão de 29/10/2026). O código e o banco estão prontos;
+// para religar, troque para true (menu Alunos, alunos no cadastro da turma, botão Chamada no cartão da aula).
+export const CHAMADA_ATIVA = false;
+
 export interface Aluno {
   id: string;
   nome: string;

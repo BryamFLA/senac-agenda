@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { Curso, Turma, UC, Usuario, eGestor } from '@/lib/types';
+import { CHAMADA_ATIVA, Curso, Turma, UC, Usuario, eGestor } from '@/lib/types';
 import Login from '@/components/Login';
 import NovaSenha from '@/components/NovaSenha';
 import { Cadastros, CadastrosCtx } from '@/components/Contexto';
@@ -98,7 +98,7 @@ export default function Home() {
   if (!ctx) return <main className="centro muted">{erro ?? 'Carregando…'}</main>;
 
   const gestor = eGestor(ctx.eu);
-  const abas = ABAS.filter((a) => gestor || !a.gestor);
+  const abas = ABAS.filter((a) => (gestor || !a.gestor) && (CHAMADA_ATIVA || a.id !== 'alunos'));
   const atual = abas.some((a) => a.id === aba) ? aba : 'agenda';
 
   return (

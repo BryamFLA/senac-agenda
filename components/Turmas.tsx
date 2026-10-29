@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { buscarTodos, supabase } from '@/lib/supabase';
-import { CORES, Turma, mensagemErro } from '@/lib/types';
+import { CHAMADA_ATIVA, CORES, Turma, mensagemErro } from '@/lib/types';
 import { ddmm, deIso } from '@/lib/datas';
 import { useCadastros } from './Contexto';
 import Modal, { SeletorCor } from './Modal';
@@ -22,6 +22,7 @@ export default function Turmas() {
   const curso = new Map(cad.cursos.map((c) => [c.id, c]));
   const [alunos, setAlunos] = useState<Map<string, number>>(new Map()); // turma → alunos em situação normal
   const contar = useCallback(async () => {
+    if (!CHAMADA_ATIVA) return; // alunos escondidos nesta versão
     const { data } = await buscarTodos<{ turma_id: string }>((de, ate) =>
       supabase.from('matriculas').select('turma_id').eq('situacao', 'normal').range(de, ate));
     const m = new Map<string, number>();
@@ -68,7 +69,7 @@ export default function Turmas() {
             <strong>{t.codigo ?? t.nome}</strong>
             <span className="cartao-lista-meta">{curso.get(t.curso_id)?.nome}</span>
             {(t.data_inicio || t.data_fim) && <span className="muted">{fmtData(t.data_inicio)} a {fmtData(t.data_fim)}</span>}
-            <span className="muted">{alunos.get(t.id) ? `${alunos.get(t.id)} aluno${alunos.get(t.id) === 1 ? '' : 's'}` : 'Sem alunos'}</span>
+            {CHAMADA_ATIVA && <span className="muted">{alunos.get(t.id) ? `${alunos.get(t.id)} aluno${alunos.get(t.id) === 1 ? '' : 's'}` : 'Sem alunos'}</span>}
             {!t.codigo && <span className="erro pequeno">Sem código — edite para informar</span>}
             {!t.ativo && <span className="selo-item">inativa</span>}
           </button>
@@ -106,7 +107,7 @@ function EditarTurma({ turma, onClose }: { turma: Turma | null; onClose: () => v
   }
 
   return (
-    <Modal largo={!!turma} titulo={turma ? (turma.codigo ?? turma.nome) : 'Nova turma'} subtitulo={turma ? curso?.nome : undefined} onClose={onClose}
+    <Modal largo={CHAMADA_ATIVA && !!turma} titulo={turma ? (turma.codigo ?? turma.nome) : 'Nova turma'} subtitulo={turma ? curso?.nome : undefined} onClose={onClose}
            rodape={<><span className="flex" /><button className="secundario" onClick={onClose}>Cancelar</button><button onClick={salvar}>Salvar</button></>}>
       <label className="campo">Curso
         {/* o curso de uma turma existente não muda: as aulas apontam para UCs do curso */}
@@ -133,7 +134,8 @@ function EditarTurma({ turma, onClose }: { turma: Turma | null; onClose: () => v
         </div>
       )}
       {erro && <p className="erro">{erro}</p>}
-      {turma ? <AlunosTurma turma={turma} /> : <p className="muted pequeno">Depois de salvar a turma, abra-a de novo para adicionar os alunos.</p>}
+      {CHAMADA_ATIVA && (turma ? <AlunosTurma turma={turma} />
+        : <p className="muted pequeno">Depois de salvar a turma, abra-a de novo para adicionar os alunos.</p>)}
     </Modal>
   );
 }
