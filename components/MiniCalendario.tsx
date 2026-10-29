@@ -1,5 +1,6 @@
 'use client';
-import { DIAS, MESES, diaSemana, diasUteisDoMes, iso } from '@/lib/datas';
+import { DIAS, MESES, ddmm, diaSemana, diasUteisDoMes, iso, nomeDia } from '@/lib/datas';
+import Icone from './Icone';
 import type { Situacao } from './ListaEscolha';
 
 interface Props {
@@ -23,9 +24,9 @@ export default function MiniCalendario({ ano, mes, onNavegar, selecionadas, moti
   return (
     <div className="minical">
       <div className="minical-nav">
-        <button type="button" className="icone pequeno" onClick={() => onNavegar(-1)} aria-label="Meses anteriores">‹</button>
-        <span className="muted">{motivos ? 'Clique nas datas para repetir no mesmo horário' : 'Verificando disponibilidade…'}</span>
-        <button type="button" className="icone pequeno" onClick={() => onNavegar(1)} aria-label="Próximos meses">›</button>
+        <button type="button" className="icone pequeno" onClick={() => onNavegar(-1)} aria-label="Meses anteriores"><Icone nome="voltar" tamanho={18} /></button>
+        <span className="muted" aria-live="polite">{motivos ? 'Clique nas datas para repetir no mesmo horário' : 'Verificando disponibilidade…'}</span>
+        <button type="button" className="icone pequeno" onClick={() => onNavegar(1)} aria-label="Próximos meses"><Icone nome="avancar" tamanho={18} /></button>
       </div>
       <div className="minical-meses">
         {meses.map((m) => {
@@ -35,7 +36,8 @@ export default function MiniCalendario({ ano, mes, onNavegar, selecionadas, moti
               <strong>{MESES[m.mes]} {m.ano}</strong>
               <div className="minical-grade">
                 {DIAS.map((d, dow) => (
-                  <button key={d} type="button" className="minical-dow" title={`Alternar todas as ${d} livres deste mês`}
+                  <button key={d} type="button" className="minical-dow" title={`Marcar ou desmarcar todas as ${d} livres deste mês`}
+                          aria-label={`Marcar ou desmarcar todas as ${d} livres de ${MESES[m.mes]}`}
                           onClick={() => onDiaSemana(dow, m.dias.filter((x) => diaSemana(x) === dow).map(iso))}>
                     {d.slice(0, 3)}
                   </button>
@@ -52,7 +54,7 @@ export default function MiniCalendario({ ano, mes, onNavegar, selecionadas, moti
                     <button key={k} type="button" onClick={() => onAlternar(k)}
                             className={`minical-dia ${sel ? 'sel' : ''} ${bloqueada ? 'bloq' : conflito ? 'conflito' : motivos ? 'livre' : ''} ${k === hoje ? 'hoje' : ''} ${k < hoje ? 'passado' : ''}`}
                             title={motivo ?? (motivos ? 'Livre' : '')} aria-pressed={sel}
-                            aria-label={`${k}${motivo ? `: ${motivo}` : ''}`}>
+                            aria-label={`${nomeDia(d)}, ${ddmm(d)}${motivo ? `: ${motivo}` : motivos ? ': livre' : ''}`}>
                       {d.getDate()}
                     </button>
                   );

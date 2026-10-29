@@ -1,4 +1,4 @@
--- Executado à mão pelo Bryam no SQL Editor do Supabase (o MCP recusa comandos de drop).
+-- Aplicada à mão no SQL Editor em 15/10/2026 (o MCP recusa drop): não consta em supabase_migrations do remoto.
 -- Complementa a migração 20261015135258_v1_conflitos_funcoes: choque de horário deixa de bloquear
 -- (vira aviso na tela) e as funções antigas, substituídas por disponibilidade_datas e
 -- ocupacao_no_horario, são removidas.

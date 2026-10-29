@@ -16,7 +16,7 @@ export function addDays(d: Date, n: number): Date {
   return r;
 }
 
-export function segundaDaSemana(d: Date): Date {
+function segundaDaSemana(d: Date): Date {
   const dow = (d.getDay() + 6) % 7; // 0 = segunda
   return addDays(d, -dow);
 }
@@ -56,3 +56,5 @@ export function diasUteisDoMes(ano: number, mes: number): Date[] {
 }
 
 export const diaSemana = (d: Date) => (d.getDay() + 6) % 7; // 0 = segunda … 5 = sábado
+/** "Segunda", "Terça"… (domingo não tem coluna na grade, mas pode aparecer numa data digitada). */
+export const nomeDia = (d: Date) => DIAS_LONGOS[diaSemana(d)] ?? 'Domingo';

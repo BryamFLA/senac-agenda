@@ -1,16 +1,14 @@
 'use client';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { eGestor } from '@/lib/types';
+import { COR_NEUTRA, Ocorrencia, eGestor } from '@/lib/types';
 import { MESES, iso, semanasDoMes } from '@/lib/datas';
 import { indices, useCadastros } from './Contexto';
-import AgendaColuna, { Modo, PainelAgenda } from './AgendaColuna';
+import AgendaColuna, { Modo, PainelAgenda, descreverAgenda } from './AgendaColuna';
+import { normal } from './Filtros';
 import Icone from './Icone';
 
 const MAX_AGENDAS = 2;
-const normal = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-
-interface Ocorrencia { item_id: string; instrutor_id: string; turma_id: string | null; motivo: string }
 
 export default function Agenda() {
   const cad = useCadastros();
@@ -62,6 +60,7 @@ export default function Agenda() {
     for (const o of ocorrencias) {
       m.set(o.instrutor_id, (m.get(o.instrutor_id) ?? 0) + 1);
       if (o.turma_id) m.set(o.turma_id, (m.get(o.turma_id) ?? 0) + 1);
+      if (o.local_id) m.set(o.local_id, (m.get(o.local_id) ?? 0) + 1);
     }
     return m;
   }, [ocorrencias]);
@@ -102,15 +101,17 @@ export default function Agenda() {
   const lista = filtroModo === 'instrutor'
     ? instrutores.filter((u) => !q || normal(u.nome).includes(q))
         .map((u) => ({ id: u.id, nome: u.nome, sub: u.id === cad.eu.id ? 'Você' : null, cor: u.cor }))
+    : filtroModo === 'local'
+    ? cad.locais.filter((l) => l.ativo && (!q || normal(l.nome).includes(q)))
+        .map((l) => ({ id: l.id, nome: l.nome, sub: null, cor: COR_NEUTRA }))
     : turmas.filter((t) => !q || normal(`${t.nome} ${t.codigo ?? ''} ${idx.curso.get(t.curso_id)?.nome ?? ''}`).includes(q))
         .map((t) => ({ id: t.id, nome: t.codigo ?? t.nome, sub: idx.curso.get(t.curso_id)?.nome ?? null, cor: t.cor }));
   const comOcorrencia = lista.filter((x) => contagem.get(x.id)).length;
 
   const p0 = paineis[0];
-  const nome0 = p0.modo === 'instrutor' ? idx.usuario.get(p0.alvo)?.nome : idx.turma.get(p0.alvo)?.nome;
-  const cor0 = p0.modo === 'instrutor' ? idx.usuario.get(p0.alvo)?.cor : idx.turma.get(p0.alvo)?.cor;
-  const rotulo0 = p0.modo === 'instrutor' ? (p0.alvo === cad.eu.id ? 'Minha agenda' : 'Agenda do instrutor') : 'Agenda da turma';
-  const mostrarFiltro = gestor || minhasTurmas.length > 0 || comparando;
+  const { nome: nome0, cor: cor0, rotulo: rotulo0 } = descreverAgenda(p0.modo, p0.alvo, idx, cad.eu.id);
+  // o instrutor sempre tem o filtro: pelo menos os locais (vê a agenda de qualquer sala)
+  const mostrarFiltro = gestor || minhasTurmas.length > 0 || comparando || cad.locais.length > 0;
 
   return (
     <div className={`agenda-layout ${mostrarFiltro ? '' : 'sem-filtro'} ${comparando ? 'comparando' : ''}`}>
@@ -124,9 +125,9 @@ export default function Agenda() {
             </div>
           </div>
           <nav className="mes" aria-label="Mês">
-            <button className="icone" onClick={() => navegar(-1)} aria-label="Mês anterior">‹</button>
+            <button className="icone" onClick={() => navegar(-1)} aria-label="Mês anterior"><Icone nome="voltar" /></button>
             <strong>{MESES[mes]} <span className="ano">{ano}</span></strong>
-            <button className="icone" onClick={() => navegar(1)} aria-label="Próximo mês">›</button>
+            <button className="icone" onClick={() => navegar(1)} aria-label="Próximo mês"><Icone nome="avancar" /></button>
             <button className="secundario" onClick={() => { setAno(hoje.getFullYear()); setMes(hoje.getMonth()); }}>Hoje</button>
           </nav>
         </div>
@@ -148,26 +149,28 @@ export default function Agenda() {
               <span className="muted pequeno">O que você escolher abaixo vai para ela. Clique na outra agenda para trocar.</span>
             </p>
           )}
-          <div className="segmentado" role="tablist" aria-label="Ver agenda por">
-            <button type="button" role="tab" aria-selected={filtroModo === 'instrutor'} className={filtroModo === 'instrutor' ? 'ativo' : ''}
+          <div className="segmentado" role="group" aria-label="Ver agenda por">
+            <button type="button" aria-pressed={filtroModo === 'instrutor'} className={filtroModo === 'instrutor' ? 'ativo' : ''}
                     onClick={() => { setFiltroModo('instrutor'); setBusca(''); }}>{gestor ? 'Instrutores' : 'Minha agenda'}</button>
-            <button type="button" role="tab" aria-selected={filtroModo === 'turma'} className={filtroModo === 'turma' ? 'ativo' : ''}
+            <button type="button" aria-pressed={filtroModo === 'turma'} className={filtroModo === 'turma' ? 'ativo' : ''}
                     onClick={() => { setFiltroModo('turma'); setBusca(''); }}>Turmas</button>
+            <button type="button" aria-pressed={filtroModo === 'local'} className={filtroModo === 'local' ? 'ativo' : ''}
+                    onClick={() => { setFiltroModo('local'); setBusca(''); }}>Locais</button>
           </div>
-          {(gestor || filtroModo === 'turma') && (
+          {(gestor || filtroModo !== 'instrutor') && (
             <label className="busca">
               <Icone nome="busca" tamanho={16} />
               <input value={busca} onChange={(e) => setBusca(e.target.value)}
-                     placeholder={filtroModo === 'instrutor' ? 'Buscar instrutor' : 'Buscar turma ou código'} aria-label="Buscar" />
+                     placeholder={filtroModo === 'instrutor' ? 'Buscar instrutor' : filtroModo === 'local' ? 'Buscar local' : 'Buscar turma ou código'} aria-label="Buscar" />
             </label>
           )}
-          <ul className="filtro-lista" role="listbox" aria-label={filtroModo === 'instrutor' ? 'Instrutores' : 'Turmas'}>
+          <ul className="filtro-lista" role="listbox" aria-label={filtroModo === 'instrutor' ? 'Instrutores' : filtroModo === 'local' ? 'Locais' : 'Turmas'}>
             {lista.map((x) => {
               const naAgenda = paineis.map((p, i) => (p.modo === filtroModo && p.alvo === x.id ? i + 1 : 0)).filter(Boolean);
               const oc = contagem.get(x.id) ?? 0;
               const selecionado = paineis[ativo]?.modo === filtroModo && paineis[ativo]?.alvo === x.id;
               return (
-                <li key={x.id}>
+                <li key={x.id} role="none">
                   <button type="button" role="option" aria-selected={selecionado}
                           className={`filtro-item ${selecionado ? 'ativo' : ''} ${oc ? 'com-ocorrencia' : ''}`}
                           onClick={() => escolher(x.id)}
@@ -177,21 +180,22 @@ export default function Agenda() {
                       <span>{x.nome}</span>
                       {x.sub && <small>{x.sub}</small>}
                     </span>
-                    {oc > 0 && <span className="ocorrencia-qtd" aria-label={`${oc} com conflito`}>⚠ {oc}</span>}
+                    {oc > 0 && <span className="ocorrencia-qtd" aria-label={`${oc} com conflito`}><Icone nome="alerta" tamanho={12} />{oc}</span>}
                     {comparando && naAgenda.map((n) => <span key={n} className="coluna-numero mini">{n}</span>)}
                   </button>
                 </li>
               );
             })}
             {!lista.length && (
-              <li className="muted pequeno filtro-vazio">
-                {busca ? 'Nada encontrado.' : filtroModo === 'instrutor' ? 'Nenhum instrutor cadastrado.' : 'Nenhuma turma.'}
+              <li role="none" className="muted pequeno filtro-vazio">
+                {busca ? 'Nada encontrado.' : filtroModo === 'instrutor' ? 'Nenhum instrutor cadastrado.'
+                  : filtroModo === 'local' ? 'Nenhum local cadastrado.' : 'Nenhuma turma.'}
               </li>
             )}
           </ul>
           {comOcorrencia > 0 && (
             <p className="filtro-aviso">
-              ⚠ Em vermelho: {comOcorrencia} {filtroModo === 'instrutor' ? 'instrutor(es)' : 'turma(s)'} com conflito de horário em {MESES[mes].toLowerCase()}.
+              <Icone nome="alerta" tamanho={14} /> Em vermelho: {comOcorrencia} {filtroModo === 'instrutor' ? 'instrutor(es)' : filtroModo === 'local' ? 'local(is)' : 'turma(s)'} com conflito de horário em {MESES[mes].toLowerCase()}.
             </p>
           )}
         </aside>
@@ -200,7 +204,7 @@ export default function Agenda() {
       {paineis.length < MAX_AGENDAS && (
         <button type="button" className="fab" onClick={adicionar} title="Abrir outra agenda ao lado para comparar"
                 aria-label="Abrir outra agenda ao lado para comparar">
-          <span aria-hidden="true">+</span>
+          <Icone nome="mais" tamanho={28} />
         </button>
       )}
     </div>

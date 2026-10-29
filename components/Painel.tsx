@@ -1,12 +1,13 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { eGestor } from '@/lib/types';
+import { Ocorrencia, eGestor } from '@/lib/types';
 import { MESES, addDays, iso } from '@/lib/datas';
 import { useCadastros } from './Contexto';
 import { ProvedorDica } from './painel/Dica';
-import { ItemPainel, LinhaAndamento, Ocorrencia, fmtH, pct, resumirTurmas } from './painel/dados';
-import { Kpi } from './painel/Partes';
+import { ItemPainel, LinhaAndamento, fmtH, pct, resumirTurmas } from './painel/dados';
+import { Kpi, irPara } from './painel/Partes';
+import Icone from './Icone';
 import Conflitos, { Conflito } from './painel/Conflitos';
 import Andamento from './painel/Andamento';
 import Fechamento from './painel/Fechamento';
@@ -155,9 +156,9 @@ export default function Painel() {
           </label>
           <div className="filtro-select"><span>Mês da carga</span>
             <div className="mes pequeno">
-              <button className="icone pequeno" onClick={() => navegar(-1)} aria-label="Mês anterior">‹</button>
+              <button className="icone pequeno" onClick={() => navegar(-1)} aria-label="Mês anterior"><Icone nome="voltar" tamanho={18} /></button>
               <strong>{MESES[mes.mes]} {mes.ano}</strong>
-              <button className="icone pequeno" onClick={() => navegar(1)} aria-label="Próximo mês">›</button>
+              <button className="icone pequeno" onClick={() => navegar(1)} aria-label="Próximo mês"><Icone nome="avancar" tamanho={18} /></button>
             </div>
           </div>
           {filtrando && (
@@ -165,13 +166,15 @@ export default function Painel() {
                     onClick={() => { setFTurma(''); setFCurso(''); if (gestor) setFInstrutor(''); }}>Limpar filtros</button>
           )}
           <nav className="painel-atalhos" aria-label="Ir para a seção">
-            <a href="#conflitos">Conflitos</a><a href="#andamento">Andamento</a><a href="#fechamento">Fechamento</a>
-            <a href="#carga">Carga</a><a href="#preparo">Preparo</a><a href="#matriz">Matriz</a>
+            {[['conflitos', 'Conflitos'], ['andamento', 'Andamento'], ['fechamento', 'Fechamento'], ['carga', 'Carga'],
+              ['preparo', 'Preparo'], ['matriz', 'Matriz']].map(([id, nome]) => (
+              <a key={id} href={`#${id}`} onClick={(e) => irPara(e, id)}>{nome}</a>
+            ))}
           </nav>
         </div>
 
         <div className="kpis">
-          <Kpi rotulo="Conflitos de horário" status={conflitosF.length ? 'critico' : 'bom'} href="#conflitos"
+          <Kpi rotulo="Conflitos de horário" status={conflitosF.length ? 'critico' : 'bom'} secao="conflitos"
                valor={conflitosF.length} complemento={conflitosF.length ? `nos próximos ${DIAS_CONFLITO} dias` : 'nenhum à vista'} />
           <Kpi rotulo="Concluído das turmas" valor={`${pct(tot.re, tot.ch)}%`}
                complemento={`${fmtH(tot.re)} de ${fmtH(tot.ch)} · ${resumos.length} turma(s)`} />
@@ -182,9 +185,9 @@ export default function Painel() {
                complemento={`${concluidas} concluída(s)${atrasadas ? ` · ${atrasadas} além do fim previsto` : ''}`}
                status={atrasadas ? 'critico' : undefined} />
           <Kpi rotulo="Aulas nos próximos 7 dias" valor={semana} complemento={`${proximasF.length} em ${DIAS_PREPARO} dias`} />
-          <Kpi rotulo="Material pronto" status={matOk < proximasF.length ? 'serio' : 'bom'} href="#preparo"
+          <Kpi rotulo="Material pronto" status={matOk < proximasF.length ? 'serio' : 'bom'} secao="preparo"
                valor={`${pct(matOk, proximasF.length)}%`} complemento={`${matOk} de ${proximasF.length} aulas (${DIAS_PREPARO} dias)`} />
-          <Kpi rotulo="PTD pronto" status={ptdOk < proximasF.length ? 'serio' : 'bom'} href="#preparo"
+          <Kpi rotulo="PTD pronto" status={ptdOk < proximasF.length ? 'serio' : 'bom'} secao="preparo"
                valor={`${pct(ptdOk, proximasF.length)}%`} complemento={`${ptdOk} de ${proximasF.length} aulas (${DIAS_PREPARO} dias)`} />
         </div>
 

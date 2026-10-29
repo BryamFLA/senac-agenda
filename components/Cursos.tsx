@@ -4,9 +4,11 @@ import { supabase } from '@/lib/supabase';
 import { Curso, UC, fmtHoras, mensagemErro } from '@/lib/types';
 import { useCadastros } from './Contexto';
 import Modal from './Modal';
+import Icone from './Icone';
 import ImportarPlano from './ImportarPlano';
 import { BarraFiltros, Busca, Filtro, SITUACOES, confereSituacao, normal } from './Filtros';
 import { nomeAutomatico } from './Turmas';
+import { avisar, confirmar } from './Avisos';
 
 const linhas = (s: string) => s.split('\n').map((x) => x.trim()).filter(Boolean);
 
@@ -117,12 +119,13 @@ function CursoDetalhe({ curso, onClose }: { curso: Curso; onClose: () => void })
     setSalvando(false);
     if (error) return setErro(mensagemErro(error));
     await cad.recarregar();
+    avisar('Curso salvo.');
     onClose();
   }
 
   return (
     <Modal largo titulo={curso.nome} subtitulo={`${ucs.length} UCs · soma ${fmtHoras(soma)} de ${fmtHoras(Number(curso.ch_total))}`}
-           onClose={onClose}
+           onClose={onClose} erro={erro}
            rodape={<><span className="flex" /><button className="secundario" onClick={onClose}>Fechar</button>
              <button onClick={salvar} disabled={salvando}>{salvando ? 'Salvando…' : 'Salvar curso'}</button></>}>
       <div className="form grade-campos">
@@ -141,7 +144,7 @@ function CursoDetalhe({ curso, onClose }: { curso: Curso; onClose: () => void })
       </div>
       <div className="secao-topo">
         <h3>Unidades curriculares</h3>
-        <button className="secundario" onClick={() => setEditUc('nova')}>+ UC</button>
+        <button className="secundario com-icone" onClick={() => setEditUc('nova')}><Icone nome="mais" tamanho={16} /> UC</button>
       </div>
       <div className="lista-ucs">
         {ucs.map((u) => (
@@ -156,7 +159,6 @@ function CursoDetalhe({ curso, onClose }: { curso: Curso; onClose: () => void })
           </details>
         ))}
       </div>
-      {erro && <p className="erro">{erro}</p>}
       {editUc && <EditarUC cursoId={curso.id} uc={editUc === 'nova' ? null : editUc} proximo={(ucs.at(-1)?.numero ?? 0) + 1} onClose={() => setEditUc(null)} />}
     </Modal>
   );
@@ -183,14 +185,16 @@ function EditarUC({ cursoId, uc, proximo, onClose }: { cursoId: string; uc: UC |
     const { error } = uc ? await supabase.from('ucs').update(dados).eq('id', uc.id) : await supabase.from('ucs').insert(dados);
     if (error) return setErro(mensagemErro(error));
     await cad.recarregar();
+    avisar('UC salva.');
     onClose();
   }
 
   async function apagar() {
-    if (!uc || !confirm('Apagar esta UC? Só é possível se não houver aulas lançadas nela.')) return;
+    if (!uc || !await confirmar({ titulo: `Apagar UC${uc.numero}?`, texto: 'Só é possível se não houver aulas lançadas nela. Não dá para desfazer.', acao: 'Apagar UC', perigo: true })) return;
     const { error } = await supabase.from('ucs').delete().eq('id', uc.id);
     if (error) return setErro(mensagemErro(error, 'Não foi possível apagar.'));
     await cad.recarregar();
+    avisar('UC apagada.');
     onClose();
   }
 
@@ -201,7 +205,7 @@ function EditarUC({ cursoId, uc, proximo, onClose }: { cursoId: string; uc: UC |
   );
 
   return (
-    <Modal largo titulo={uc ? `UC${uc.numero} — ${uc.nome}` : 'Nova UC'} onClose={onClose}
+    <Modal largo titulo={uc ? `UC${uc.numero} — ${uc.nome}` : 'Nova UC'} onClose={onClose} erro={erro}
            rodape={<>{uc && <button className="perigo" onClick={apagar}>Apagar UC</button>}<span className="flex" />
              <button className="secundario" onClick={onClose}>Cancelar</button><button onClick={salvar}>Salvar UC</button></>}>
       <div className="form grade-campos">
@@ -219,7 +223,6 @@ function EditarUC({ cursoId, uc, proximo, onClose }: { cursoId: string; uc: UC |
         {area('indicadores', 'Indicadores')}
         {f.tipo === 'regular' && <>{area('conhecimentos', 'Conhecimentos')}{area('habilidades', 'Habilidades')}{area('atitudes', 'Atitudes e valores')}</>}
       </div>
-      {erro && <p className="erro">{erro}</p>}
     </Modal>
   );
 }

@@ -1,5 +1,5 @@
 'use client';
-import { DIAS_LONGOS, ddmm, deIso, diaSemana, hhmm } from '@/lib/datas';
+import { ddmm, deIso, hhmm, nomeDia } from '@/lib/datas';
 import type { Turma, Usuario } from '@/lib/types';
 import type { ItemPainel } from './dados';
 import { Secao, Selo } from './Partes';
@@ -34,7 +34,7 @@ export default function Conflitos({ lista, usuarios, turmas, dias }: {
           <div key={d} className="conflito-dia">
             <div className="conflito-data">
               <strong>{ddmm(deIso(d))}</strong>
-              <span>{DIAS_LONGOS[diaSemana(deIso(d))] ?? 'Domingo'}</span>
+              <span>{nomeDia(deIso(d))}</span>
             </div>
             <ul>
               {porData.get(d)!.sort((a, b) => a.item.hora_inicio.localeCompare(b.item.hora_inicio)).map(({ item, motivo }) => {

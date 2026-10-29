@@ -1,10 +1,13 @@
 'use client';
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { invocar, supabase } from '@/lib/supabase';
 import { fmtHoras, mensagemErro } from '@/lib/types';
 import { segmentarPlano } from '@/lib/plano';
 import { useCadastros } from './Contexto';
 import Modal from './Modal';
+import { normal } from './Filtros';
+import Icone from './Icone';
+import { avisar, confirmar } from './Avisos';
 
 interface UcRascunho {
   numero: number;
@@ -30,17 +33,9 @@ interface Rascunho {
 }
 
 const VAZIO: Rascunho = { nome: '', eixo: null, segmento: null, ch_total: 0, codigo_dn: null, cbo: null, hora_aula_min: 60, ucs: [] };
-const normal = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const chave = (s: string) => normal(s).replace(/[^a-z0-9]+/g, ' ').trim(); // compara nomes ignorando pontuação
 
-async function lerParte(corpo: object): Promise<any> {
-  const { data, error } = await supabase.functions.invoke('ler-plano', { body: corpo });
-  if (error) {
-    let msg = error.message;
-    try { msg = (await (error as { context: Response }).context.json()).erro ?? msg; } catch { /* resposta sem JSON */ }
-    throw new Error(msg);
-  }
-  return data;
-}
+const lerParte = (corpo: object) => invocar<any>('ler-plano', corpo);
 
 /** Roda as tarefas com no máximo `n` ao mesmo tempo. */
 async function emLotes<T>(tarefas: (() => Promise<T>)[], n: number, aoTerminar: () => void): Promise<PromiseSettledResult<T>[]> {
@@ -90,8 +85,8 @@ export default function ImportarPlano({ manual, onClose }: { manual: boolean; on
       });
       // a tabela (geral) dá tipo e "integra"; o detalhamento dá nome, CH e elementos
       const ucs = detalhes.map((d) => {
-        const g = geral.ucs.find((u) => u.numero === d.numero && (!d.nome || normal(u.nome).slice(0, 15) === normal(d.nome).slice(0, 15)))
-          ?? geral.ucs.find((u) => d.nome && (normal(u.nome).includes(normal(d.nome)) || normal(d.nome).includes(normal(u.nome))));
+        const g = geral.ucs.find((u) => u.numero === d.numero && (!d.nome || chave(u.nome).slice(0, 15) === chave(d.nome).slice(0, 15)))
+          ?? geral.ucs.find((u) => d.nome && (chave(u.nome).includes(chave(d.nome)) || chave(d.nome).includes(chave(u.nome))));
         const pi = g?.tipo === 'projeto_integrador' || /projeto\s+integrador/i.test(d.nome);
         return {
           ...d,
@@ -124,19 +119,24 @@ export default function ImportarPlano({ manual, onClose }: { manual: boolean; on
     if (!r.ucs.length) return setErro('O curso precisa de pelo menos uma UC.');
     if (r.ucs.some((u) => !u.nome.trim() || !(Number(u.ch) > 0))) return setErro('Toda UC precisa de nome e carga horária.');
     if (new Set(r.ucs.map((u) => u.numero)).size !== r.ucs.length) return setErro('Há UCs com o mesmo número.');
-    if (!bate && !confirm(`A soma das UCs (${fmtHoras(soma)}) não bate com a carga horária total (${fmtHoras(Number(r.ch_total))}). Salvar assim mesmo?`)) return;
+    if (!bate && !await confirmar({
+      titulo: 'A soma das UCs não fecha',
+      texto: `A soma das UCs (${fmtHoras(soma)}) não bate com a carga horária total (${fmtHoras(Number(r.ch_total))}). Salvar assim mesmo?`,
+      acao: 'Salvar assim mesmo',
+    })) return;
     setSalvando(true);
     const { error } = await supabase.rpc('salvar_curso', { p: { ...r, ucs: r.ucs.map(({ falhou: _f, ...u }) => u) } });
     setSalvando(false);
     if (error) return setErro(mensagemErro(error));
     await cad.recarregar();
+    avisar('Curso salvo.');
     onClose();
   }
 
   return (
     <Modal largo titulo={manual ? 'Novo curso' : 'Importar plano de curso'}
            subtitulo={etapa === 'revisao' ? 'Revise os dados antes de salvar' : 'O PDF é lido pela IA; você revisa tudo antes de gravar'}
-           onClose={onClose}
+           onClose={onClose} erro={erro}
            rodape={etapa === 'revisao' ? <><span className="flex" /><button className="secundario" onClick={onClose}>Cancelar</button>
              <button onClick={salvar} disabled={salvando}>{salvando ? 'Salvando…' : 'Salvar curso'}</button></> : undefined}>
       {etapa === 'arquivo' && (
@@ -172,8 +172,8 @@ export default function ImportarPlano({ manual, onClose }: { manual: boolean; on
             <label className="campo">Código DN<input value={r.codigo_dn ?? ''} onChange={(e) => setR({ ...r, codigo_dn: e.target.value })} /></label>
             <label className="campo">CBO<input value={r.cbo ?? ''} onChange={(e) => setR({ ...r, cbo: e.target.value })} /></label>
           </div>
-          <p className={bate ? 'ok-txt' : 'erro'}>
-            Soma das UCs: <strong>{fmtHoras(soma)}</strong> de {fmtHoras(Number(r.ch_total))} {bate ? '✓ confere' : '— não confere'}
+          <p className={`com-icone ${bate ? 'ok-txt' : 'erro'}`}><Icone nome={bate ? 'check' : 'alerta'} tamanho={16} />
+            Soma das UCs: <strong>{fmtHoras(soma)}</strong> de {fmtHoras(Number(r.ch_total))} {bate ? 'confere' : '— não confere'}
           </p>
           <div className="tabela-rolagem">
             <table className="tabela">
@@ -194,7 +194,7 @@ export default function ImportarPlano({ manual, onClose }: { manual: boolean; on
                              onChange={(e) => atualizarUc(i, { integra: e.target.value.split(/[,\s]+/).map(Number).filter((n) => n > 0) })} />
                     )}</td>
                     <td className="muted nowrap" title={u.falhou ? 'A leitura falhou: complete depois em Cursos › Editar UC' : ''}>
-                      {u.falhou ? '⚠ não lido' : `${u.indicadores.length} ind · ${u.conhecimentos.length} con · ${u.habilidades.length} hab · ${u.atitudes.length} ati`}
+                      {u.falhou ? <span className="com-icone erro"><Icone nome="alerta" tamanho={14} /> não lido</span> : `${u.indicadores.length} ind · ${u.conhecimentos.length} con · ${u.habilidades.length} hab · ${u.atitudes.length} ati`}
                     </td>
                     <td><button className="link" onClick={() => setR({ ...r, ucs: r.ucs.filter((_, j) => j !== i) })} aria-label="Remover UC">Remover</button></td>
                   </tr>
@@ -202,12 +202,11 @@ export default function ImportarPlano({ manual, onClose }: { manual: boolean; on
               </tbody>
             </table>
           </div>
-          <button className="secundario" onClick={() => setR({ ...r, ucs: [...r.ucs, { numero: (r.ucs.at(-1)?.numero ?? 0) + 1, nome: '', ch: 0, tipo: 'regular', integra: [], indicadores: [], conhecimentos: [], habilidades: [], atitudes: [] }] })}>
-            + Adicionar UC
+          <button className="secundario com-icone" onClick={() => setR({ ...r, ucs: [...r.ucs, { numero: (r.ucs.at(-1)?.numero ?? 0) + 1, nome: '', ch: 0, tipo: 'regular', integra: [], indicadores: [], conhecimentos: [], habilidades: [], atitudes: [] }] })}>
+            <Icone nome="mais" tamanho={16} /> Adicionar UC
           </button>
         </>
       )}
-      {erro && <p className="erro">{erro}</p>}
     </Modal>
   );
 }

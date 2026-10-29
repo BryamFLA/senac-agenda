@@ -1,5 +1,5 @@
 'use client';
-import { DIAS_LONGOS, ddmm, deIso, diaSemana, hhmm } from '@/lib/datas';
+import { ddmm, deIso, hhmm, nomeDia } from '@/lib/datas';
 import type { Turma, UC, Usuario } from '@/lib/types';
 import { ItemPainel, pct } from './dados';
 import { useDica } from './Dica';
@@ -73,7 +73,7 @@ export default function Preparo({ aulas, dias, usuarios, turmas, ucs }: {
                 const d = deIso(a.data);
                 return (
                   <li key={a.id}>
-                    <span className="pend-data"><strong>{ddmm(d)}</strong> <small>{(DIAS_LONGOS[diaSemana(d)] ?? 'Dom').slice(0, 3)} {hhmm(a.hora_inicio)}</small></span>
+                    <span className="pend-data"><strong>{ddmm(d)}</strong> <small>{nomeDia(d).slice(0, 3)} {hhmm(a.hora_inicio)}</small></span>
                     <span className="pend-oque">
                       <strong>{t?.codigo ?? t?.nome}</strong> · UC{u?.numero}
                       <small>{us.get(a.instrutor_id)?.nome}</small>

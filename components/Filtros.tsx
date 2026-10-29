@@ -18,7 +18,7 @@ export function Busca({ valor, onChange, placeholder }: { valor: string; onChang
     <label className="busca barra-busca">
       <Icone nome="busca" tamanho={16} />
       <input value={valor} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} aria-label={placeholder} />
-      {valor && <button type="button" className="limpar" onClick={() => onChange('')} aria-label="Limpar busca">×</button>}
+      {valor && <button type="button" className="limpar" onClick={() => onChange('')} aria-label="Limpar busca"><Icone nome="fechar" tamanho={16} /></button>}
     </label>
   );
 }

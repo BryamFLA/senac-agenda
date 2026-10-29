@@ -1,6 +1,6 @@
 'use client';
 import { createContext, useContext } from 'react';
-import type { Curso, Turma, UC, Usuario } from '@/lib/types';
+import type { Curso, Local, Turma, UC, Usuario } from '@/lib/types';
 
 /** Cadastros carregados uma vez no login e compartilhados pelas telas. */
 export interface Cadastros {
@@ -9,6 +9,7 @@ export interface Cadastros {
   cursos: Curso[];
   ucs: UC[];
   turmas: Turma[];
+  locais: Local[];
   recarregar: () => Promise<void>;
 }
 
@@ -27,5 +28,6 @@ export function indices(c: Cadastros) {
     turma: new Map(c.turmas.map((t) => [t.id, t])),
     uc: new Map(c.ucs.map((u) => [u.id, u])),
     curso: new Map(c.cursos.map((x) => [x.id, x])),
+    local: new Map(c.locais.map((x) => [x.id, x])),
   };
 }

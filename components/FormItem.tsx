@@ -1,15 +1,17 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { CORES, DIA_TODO, Item, TURNOS, Turno, fmtMin, mensagemErro, minutos } from '@/lib/types';
-import { DIAS_LONGOS, ddmm, deIso, diaSemana, diasUteisDoMes, hhmm, iso } from '@/lib/datas';
+import { COR_NEUTRA, CORES, DIA_TODO, Item, TURNOS, Turno, fmtMin, mensagemErro, minutos } from '@/lib/types';
+import { ddmm, deIso, diasUteisDoMes, hhmm, iso, nomeDia } from '@/lib/datas';
 import { useCadastros } from './Contexto';
 import Modal, { SeletorCor } from './Modal';
 import MiniCalendario from './MiniCalendario';
 import ListaEscolha, { Situacao } from './ListaEscolha';
+import Icone from './Icone';
+import { avisar, confirmar } from './Avisos';
 
 interface Props {
-  modo: 'instrutor' | 'turma'; // filtro da agenda: fixa o instrutor ou a turma num lançamento novo
+  modo: 'instrutor' | 'turma' | 'local'; // filtro da agenda: fixa o instrutor, a turma ou o local num lançamento novo
   alvoId: string;
   data: Date; // célula clicada (ou data do item)
   turno: Turno;
@@ -31,11 +33,14 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
   const [turmaId, setTurmaId] = useState(item?.turma_id ?? (modo === 'turma' ? alvoId : ''));
   const [ucId, setUcId] = useState(item?.uc_id ?? '');
   const [titulo, setTitulo] = useState(item?.titulo ?? '');
-  const [cor, setCor] = useState(item?.cor ?? '#64748B');
+  const [cor, setCor] = useState(item?.cor ?? COR_NEUTRA);
   const [trabalho, setTrabalho] = useState(item?.trabalho ?? true);
   const [inicio, setInicio] = useState(item ? hhmm(item.hora_inicio) : t0.inicio);
   const [fim, setFim] = useState(item ? hhmm(item.hora_fim) : t0.fim);
   const [obs, setObs] = useState(item?.observacao ?? '');
+  const [localId, setLocalId] = useState(item?.local_id ?? (!item && modo === 'local' ? alvoId : ''));
+  const [outroLocal, setOutroLocal] = useState(!!item?.local_outro);
+  const [localTexto, setLocalTexto] = useState(item?.local_outro ?? '');
   const [datas, setDatas] = useState<Set<string>>(new Set([iso(data)]));
   const [dataUnica, setDataUnica] = useState(iso(data));
   const [cal, setCal] = useState({ ano: data.getFullYear(), mes: data.getMonth() });
@@ -53,6 +58,7 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
   const ucs = cad.ucs.filter((u) => turma && u.curso_id === turma.curso_id).sort((a, b) => a.numero - b.numero);
   const uc = cad.ucs.find((u) => u.id === ucId);
   const instrutor = cad.usuarios.find((u) => u.id === instrutorId);
+  const locais = cad.locais.filter((l) => l.ativo || l.id === localId);
   const ehAula = tipo === 'aula';
 
   // horas já agendadas por UC na turma (para "restam Xh")
@@ -98,7 +104,7 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
   const rpc = (ini: string, f: string) => supabase.rpc('disponibilidade_datas', {
     p_datas: datasConsulta, p_ini: ini, p_fim: f, p_instrutor: instrutorId, p_tipo: tipo,
     p_turma: ehAula ? turmaId : null, p_uc: ehAula ? ucId : null, p_trabalho: ehAula ? true : trabalho,
-    p_ignorar: item?.id ?? null,
+    p_ignorar: item?.id ?? null, p_local: localId || null,
   });
 
   useEffect(() => {
@@ -112,7 +118,7 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
       setMotivos(new Map((r ?? []).map((x: { data: string } & Situacao) => [x.data, { motivo: x.motivo, conflito: x.conflito }])));
     }, 250);
     return () => { vivo = false; clearTimeout(h); };
-  }, [pronto, datasConsulta, inicio, fim, instrutorId, turmaId, ucId, tipo, trabalho]);
+  }, [pronto, datasConsulta, inicio, fim, instrutorId, turmaId, ucId, tipo, trabalho, localId]);
 
   // horários compatíveis: quantas datas visíveis estão livres em cada turno
   useEffect(() => {
@@ -128,7 +134,7 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
       if (vivo) setLivresPorTurno(r);
     }, 400);
     return () => { vivo = false; clearTimeout(h); };
-  }, [pronto, editando, datasConsulta, instrutorId, turmaId, ucId, tipo, trabalho]);
+  }, [pronto, editando, datasConsulta, instrutorId, turmaId, ucId, tipo, trabalho, localId]);
 
   const durMin = fim > inicio ? minutos(inicio, fim) : 0;
   const n = editando ? 1 : datas.size;
@@ -143,7 +149,7 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
 
   // na edição, só pede nova confirmação de conflito se mexer em data, horário, instrutor ou turma
   const mudouHorario = !item || item.data !== dataUnica || hhmm(item.hora_inicio) !== inicio || hhmm(item.hora_fim) !== fim
-    || item.instrutor_id !== instrutorId || item.turma_id !== (ehAula ? turmaId : null);
+    || item.instrutor_id !== instrutorId || item.turma_id !== (ehAula ? turmaId : null) || (item.local_id ?? '') !== localId;
   const selecionadas = [...(editando ? [dataUnica] : datas)].sort();
   const selecionadasBloqueadas = selecionadas.map((d) => motivos?.get(d)?.motivo).filter((m): m is string => !!m);
   const selecionadasConflito = selecionadas.map((d) => motivos?.get(d)?.conflito).filter((m): m is string => !!m);
@@ -172,6 +178,7 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
     if (ehAula && (!turmaId || !ucId)) return setErro('Escolha a turma e a UC.');
     if (!ehAula && !titulo.trim()) return setErro('Dê um nome ao evento.');
     if (fim <= inicio) return setErro('O horário final precisa ser depois do inicial.');
+    if (outroLocal && !localTexto.trim()) return setErro('Digite o local ou escolha um da lista.');
     if (!editando && !datas.size) return setErro('Marque pelo menos uma data no calendário.');
     if (selecionadasBloqueadas.length) return setErro(selecionadasBloqueadas.slice(0, 3).join(' '));
     if (passaCh && !confirmaCh) return setErro('Confirme que o lançamento passa da carga horária da UC.');
@@ -182,6 +189,7 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
       turma_id: ehAula ? turmaId : null, uc_id: ehAula ? ucId : null,
       titulo: ehAula ? null : titulo.trim(), cor: ehAula ? null : cor,
       trabalho: ehAula ? true : trabalho, observacao: obs.trim() || null,
+      local_id: outroLocal ? null : localId || null, local_outro: outroLocal ? localTexto.trim() : null,
     };
     setSalvando(true);
     let error;
@@ -193,13 +201,16 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
     }
     setSalvando(false);
     if (error) return setErro(mensagemErro(error));
+    avisar(editando ? 'Alterações salvas.' : n > 1 ? `${n} datas lançadas na agenda.` : 'Lançado na agenda.');
     onSaved();
   }
 
   async function apagar(serie: boolean) {
     if (!item) return;
-    const pergunta = serie ? 'Apagar este item e os próximos da mesma série?' : 'Apagar este item da agenda?';
-    if (!confirm(pergunta)) return;
+    const ok = await confirmar(serie
+      ? { titulo: 'Apagar esta e as próximas?', texto: 'Este item e os próximos da mesma série saem da agenda. Não dá para desfazer.', acao: 'Apagar série', perigo: true }
+      : { titulo: 'Apagar da agenda?', texto: 'Este item sai da agenda. Não dá para desfazer.', acao: 'Apagar', perigo: true });
+    if (!ok) return;
     setSalvando(true);
     const q = supabase.from('itens').delete();
     const { error } = serie && item.serie_id
@@ -207,19 +218,21 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
       : await q.eq('id', item.id);
     setSalvando(false);
     if (error) return setErro(mensagemErro(error, 'Não foi possível apagar.'));
+    avisar(serie ? 'Série apagada.' : 'Item apagado.');
     onSaved();
   }
 
   const fixoInstrutor = !editando && modo === 'instrutor';
   const fixoTurma = !editando && modo === 'turma';
+  const localAgenda = modo === 'local' ? cad.locais.find((l) => l.id === alvoId) : undefined;
   const dDia = editando ? deIso(dataUnica) : data;
 
   return (
     <Modal largo={!editando}
-           titulo={editando ? `${DIAS_LONGOS[diaSemana(dDia)] ?? 'Domingo'}, ${ddmm(dDia)}` : 'Lançar na agenda'}
+           titulo={editando ? `${nomeDia(dDia)}, ${ddmm(dDia)}` : 'Lançar na agenda'}
            subtitulo={editando ? (item.origem === 'v0' ? 'Importado da agenda antiga — dá para converter em aula' : 'Editar') :
-             fixoInstrutor ? `Agenda de ${instrutor?.nome ?? ''}` : `Agenda da turma ${turma?.nome ?? ''}`}
-           onClose={onClose}
+             fixoInstrutor ? `Agenda de ${instrutor?.nome ?? ''}` : localAgenda ? `Agenda do local ${localAgenda.nome}` : `Agenda da turma ${turma?.nome ?? ''}`}
+           onClose={onClose} erro={erro}
            rodape={<>
              {editando && <button className="perigo" onClick={() => apagar(false)} disabled={salvando}>Apagar</button>}
              {editando && item.serie_id && <button className="perigo" onClick={() => apagar(true)} disabled={salvando}>Apagar esta e as próximas</button>}
@@ -300,8 +313,20 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
             </label>
           )}
 
+          <ListaEscolha rotulo="Local" manterOrdem situacao={ocupacao}
+                        valor={outroLocal ? '__outro' : localId}
+                        onChange={(id) => { setOutroLocal(id === '__outro'); setLocalId(id === '__outro' ? '' : id); }}
+                        itens={[{ id: '', nome: 'Sem local' }, ...locais.map((l) => ({ id: l.id, nome: l.nome })),
+                                { id: '__outro', nome: 'Outro local (digitar)' }]}
+                        resumo={resumoLista(locais)} />
+          {outroLocal && (
+            <label className="campo">Qual local?
+              <input value={localTexto} onChange={(e) => setLocalTexto(e.target.value)} placeholder="Ex.: Empresa parceira, visita técnica" />
+            </label>
+          )}
+
           <label className="campo">Observação
-            <input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Opcional — ex.: laboratório 2, avaliação" />
+            <input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Opcional — ex.: avaliação, trazer material" />
           </label>
         </div>
 
@@ -349,7 +374,7 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
       )}
       {selecionadasConflito.length > 0 && (
         <div className="alerta conflito">
-          <strong>⚠ Conflito de horário {selecionadasConflito.length === 1 ? 'nesta data' : `em ${selecionadasConflito.length} datas`}:</strong>
+          <strong className="alerta-titulo"><Icone nome="alerta" tamanho={16} /> Conflito de horário {selecionadasConflito.length === 1 ? 'nesta data' : `em ${selecionadasConflito.length} datas`}:</strong>
           <ul>{selecionadasConflito.slice(0, 5).map((m, i) => <li key={i}>{m}</li>)}</ul>
           {selecionadasConflito.length > 5 && <span>e mais {selecionadasConflito.length - 5}…</span>}
           {mudouHorario ? (
@@ -360,7 +385,6 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
           ) : <span>Este item já está em conflito. Mude o horário, a data ou a pessoa para resolver.</span>}
         </div>
       )}
-      {erro && <p className="erro">{erro}</p>}
     </Modal>
   );
 }

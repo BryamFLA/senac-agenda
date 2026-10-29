@@ -39,9 +39,19 @@ export function Selo({ status, children }: { status: Status; children: React.Rea
   );
 }
 
+/**
+ * Rola até uma seção do painel sem mexer no endereço: o #hash da URL escolhe a página (#painel),
+ * e trocar por #conflitos faria o recarregar cair na Agenda.
+ */
+export function irPara(e: React.MouseEvent, id: string) {
+  e.preventDefault();
+  const reduzir = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  document.getElementById(id)?.scrollIntoView({ behavior: reduzir ? 'auto' : 'smooth', block: 'start' });
+}
+
 /** Indicador (stat tile): rótulo, valor grande, complemento. */
-export function Kpi({ rotulo, valor, complemento, status, href }: {
-  rotulo: string; valor: React.ReactNode; complemento?: React.ReactNode; status?: Status; href?: string;
+export function Kpi({ rotulo, valor, complemento, status, secao }: {
+  rotulo: string; valor: React.ReactNode; complemento?: React.ReactNode; status?: Status; secao?: string; // secao: id da seção para onde o clique leva
 }) {
   const conteudo = (
     <>
@@ -50,8 +60,8 @@ export function Kpi({ rotulo, valor, complemento, status, href }: {
       {complemento && <span className="kpi-comp">{complemento}</span>}
     </>
   );
-  return href
-    ? <a className={`kpi ${status === 'critico' ? 'kpi-critico' : ''}`} href={href}>{conteudo}</a>
+  return secao
+    ? <a className={`kpi ${status === 'critico' ? 'kpi-critico' : ''}`} href={`#${secao}`} onClick={(e) => irPara(e, secao)}>{conteudo}</a>
     : <div className={`kpi ${status === 'critico' ? 'kpi-critico' : ''}`}>{conteudo}</div>;
 }
 
