@@ -10,7 +10,9 @@ import Icone from './Icone';
 const MAX_AGENDAS = 2;
 const normal = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
-interface Ocorrencia { item_id: string; instrutor_id: string; turma_id: string | null; motivo: string }
+interface Ocorrencia { item_id: string; instrutor_id: string; turma_id: string | null; local_id: string | null; motivo: string }
+
+const COR_LOCAL = '#64748B';
 
 export default function Agenda() {
   const cad = useCadastros();
@@ -62,6 +64,7 @@ export default function Agenda() {
     for (const o of ocorrencias) {
       m.set(o.instrutor_id, (m.get(o.instrutor_id) ?? 0) + 1);
       if (o.turma_id) m.set(o.turma_id, (m.get(o.turma_id) ?? 0) + 1);
+      if (o.local_id) m.set(o.local_id, (m.get(o.local_id) ?? 0) + 1);
     }
     return m;
   }, [ocorrencias]);
@@ -102,15 +105,22 @@ export default function Agenda() {
   const lista = filtroModo === 'instrutor'
     ? instrutores.filter((u) => !q || normal(u.nome).includes(q))
         .map((u) => ({ id: u.id, nome: u.nome, sub: u.id === cad.eu.id ? 'Você' : null, cor: u.cor }))
+    : filtroModo === 'local'
+    ? cad.locais.filter((l) => l.ativo && (!q || normal(l.nome).includes(q)))
+        .map((l) => ({ id: l.id, nome: l.nome, sub: null, cor: COR_LOCAL }))
     : turmas.filter((t) => !q || normal(`${t.nome} ${t.codigo ?? ''} ${idx.curso.get(t.curso_id)?.nome ?? ''}`).includes(q))
         .map((t) => ({ id: t.id, nome: t.codigo ?? t.nome, sub: idx.curso.get(t.curso_id)?.nome ?? null, cor: t.cor }));
   const comOcorrencia = lista.filter((x) => contagem.get(x.id)).length;
 
   const p0 = paineis[0];
-  const nome0 = p0.modo === 'instrutor' ? idx.usuario.get(p0.alvo)?.nome : idx.turma.get(p0.alvo)?.nome;
-  const cor0 = p0.modo === 'instrutor' ? idx.usuario.get(p0.alvo)?.cor : idx.turma.get(p0.alvo)?.cor;
-  const rotulo0 = p0.modo === 'instrutor' ? (p0.alvo === cad.eu.id ? 'Minha agenda' : 'Agenda do instrutor') : 'Agenda da turma';
-  const mostrarFiltro = gestor || minhasTurmas.length > 0 || comparando;
+  const nome0 = p0.modo === 'instrutor' ? idx.usuario.get(p0.alvo)?.nome
+    : p0.modo === 'local' ? idx.local.get(p0.alvo)?.nome : idx.turma.get(p0.alvo)?.nome;
+  const cor0 = p0.modo === 'instrutor' ? idx.usuario.get(p0.alvo)?.cor
+    : p0.modo === 'local' ? (p0.alvo ? COR_LOCAL : undefined) : idx.turma.get(p0.alvo)?.cor;
+  const rotulo0 = p0.modo === 'instrutor' ? (p0.alvo === cad.eu.id ? 'Minha agenda' : 'Agenda do instrutor')
+    : p0.modo === 'local' ? 'Agenda do local' : 'Agenda da turma';
+  // o instrutor sempre tem o filtro: pelo menos os locais (vê a agenda de qualquer sala)
+  const mostrarFiltro = gestor || minhasTurmas.length > 0 || comparando || cad.locais.length > 0;
 
   return (
     <div className={`agenda-layout ${mostrarFiltro ? '' : 'sem-filtro'} ${comparando ? 'comparando' : ''}`}>
@@ -153,15 +163,17 @@ export default function Agenda() {
                     onClick={() => { setFiltroModo('instrutor'); setBusca(''); }}>{gestor ? 'Instrutores' : 'Minha agenda'}</button>
             <button type="button" role="tab" aria-selected={filtroModo === 'turma'} className={filtroModo === 'turma' ? 'ativo' : ''}
                     onClick={() => { setFiltroModo('turma'); setBusca(''); }}>Turmas</button>
+            <button type="button" role="tab" aria-selected={filtroModo === 'local'} className={filtroModo === 'local' ? 'ativo' : ''}
+                    onClick={() => { setFiltroModo('local'); setBusca(''); }}>Locais</button>
           </div>
-          {(gestor || filtroModo === 'turma') && (
+          {(gestor || filtroModo !== 'instrutor') && (
             <label className="busca">
               <Icone nome="busca" tamanho={16} />
               <input value={busca} onChange={(e) => setBusca(e.target.value)}
-                     placeholder={filtroModo === 'instrutor' ? 'Buscar instrutor' : 'Buscar turma ou código'} aria-label="Buscar" />
+                     placeholder={filtroModo === 'instrutor' ? 'Buscar instrutor' : filtroModo === 'local' ? 'Buscar local' : 'Buscar turma ou código'} aria-label="Buscar" />
             </label>
           )}
-          <ul className="filtro-lista" role="listbox" aria-label={filtroModo === 'instrutor' ? 'Instrutores' : 'Turmas'}>
+          <ul className="filtro-lista" role="listbox" aria-label={filtroModo === 'instrutor' ? 'Instrutores' : filtroModo === 'local' ? 'Locais' : 'Turmas'}>
             {lista.map((x) => {
               const naAgenda = paineis.map((p, i) => (p.modo === filtroModo && p.alvo === x.id ? i + 1 : 0)).filter(Boolean);
               const oc = contagem.get(x.id) ?? 0;
@@ -185,13 +197,14 @@ export default function Agenda() {
             })}
             {!lista.length && (
               <li className="muted pequeno filtro-vazio">
-                {busca ? 'Nada encontrado.' : filtroModo === 'instrutor' ? 'Nenhum instrutor cadastrado.' : 'Nenhuma turma.'}
+                {busca ? 'Nada encontrado.' : filtroModo === 'instrutor' ? 'Nenhum instrutor cadastrado.'
+                  : filtroModo === 'local' ? 'Nenhum local cadastrado.' : 'Nenhuma turma.'}
               </li>
             )}
           </ul>
           {comOcorrencia > 0 && (
             <p className="filtro-aviso">
-              ⚠ Em vermelho: {comOcorrencia} {filtroModo === 'instrutor' ? 'instrutor(es)' : 'turma(s)'} com conflito de horário em {MESES[mes].toLowerCase()}.
+              ⚠ Em vermelho: {comOcorrencia} {filtroModo === 'instrutor' ? 'instrutor(es)' : filtroModo === 'local' ? 'local(is)' : 'turma(s)'} com conflito de horário em {MESES[mes].toLowerCase()}.
             </p>
           )}
         </aside>

@@ -15,6 +15,7 @@ interface Props {
   onChange: (id: string) => void;
   situacao: Map<string, Situacao> | null; // null = verificando (ou sem horário)
   resumo?: string | null;
+  manterOrdem?: boolean; // não reordena por nome (só põe os ocupados por último)
 }
 
 const semData = (s: string | null) => (s ?? '').replace(/^\d\d\/\d\d: /, '');
@@ -23,13 +24,13 @@ const semData = (s: string | null) => (s ?? '').replace(/^\d\d\/\d\d: /, '');
  * Lista de escolha com a disponibilidade de cada opção: livres primeiro; em conflito de horário com o nome
  * em vermelho (dá para escolher, com aviso); bloqueadas pelas regras do RH em vermelho e desabilitadas.
  */
-export default function ListaEscolha({ rotulo, itens, valor, onChange, situacao, resumo }: Props) {
+export default function ListaEscolha({ rotulo, itens, valor, onChange, situacao, resumo, manterOrdem }: Props) {
   const [busca, setBusca] = useState('');
   const peso = (id: string) => (!situacao ? 0 : situacao.get(id)?.motivo ? 2 : situacao.get(id)?.conflito ? 1 : 0);
   const q = busca.trim().toLowerCase();
   const lista = itens
     .filter((x) => !q || `${x.nome} ${x.sub ?? ''}`.toLowerCase().includes(q))
-    .sort((a, b) => peso(a.id) - peso(b.id) || a.nome.localeCompare(b.nome, 'pt-BR'));
+    .sort((a, b) => peso(a.id) - peso(b.id) || (manterOrdem ? 0 : a.nome.localeCompare(b.nome, 'pt-BR')));
 
   return (
     <div className="campo">

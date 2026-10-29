@@ -8,6 +8,7 @@ export interface Cartao {
   cor: string;
   selo?: string; // ex.: "v0" nos itens importados da agenda antiga
   alerta?: string | null; // conflito de horário já gravado
+  local?: string | null; // sala/laboratório (não aparece na agenda do próprio local)
 }
 
 interface Props {
@@ -19,6 +20,7 @@ interface Props {
   descrever: (i: Item) => Cartao;
   onItem: (i: Item) => void;
   onCelula?: (data: Date, turno: Turno) => void; // sem isso a grade é só leitura
+  podeCelula?: (data: Date, turno: Turno, itens: Item[]) => boolean; // esconde o "+" em células que não aceitam lançamento
   acoes?: (i: Item) => React.ReactNode; // ex.: ícones Material/PTD
 }
 
@@ -29,7 +31,7 @@ function horarioDiferente(i: Item): string | null {
   return ini === t.inicio && fim === t.fim ? null : `${ini} – ${fim}`;
 }
 
-export default function Grade({ semanas, mes, itens, grande, compacto, descrever, onItem, onCelula, acoes }: Props) {
+export default function Grade({ semanas, mes, itens, grande, compacto, descrever, onItem, onCelula, podeCelula, acoes }: Props) {
   const hoje = iso(new Date());
   const porCelula = new Map<string, Item[]>();
   for (const i of [...itens].sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio))) {
@@ -75,13 +77,14 @@ export default function Grade({ semanas, mes, itens, grande, compacto, descrever
                             <span className="nome">{c.alerta && <span className="selo-conflito" aria-label="Conflito de horário">⚠</span>}{c.titulo}{c.selo && <span className="selo-item">{c.selo}</span>}</span>
                             {c.alerta && <span className="sub alerta-txt">{c.alerta}</span>}
                             {c.sub && <span className="sub">{c.sub}</span>}
+                            {c.local && <span className="local-txt">{c.local}</span>}
                             {extra && <span className="hora">{extra}</span>}
                           </button>
                           {acoes && i.tipo === 'aula' && <div className="cartao-acoes">{acoes(i)}</div>}
                         </div>
                       );
                     })}
-                    {onCelula && (
+                    {onCelula && (!podeCelula || podeCelula(d, t.id, lista)) && (
                       <button type="button" className={`adicionar ${lista.length ? 'mini' : ''}`}
                               onClick={() => onCelula(d, t.id)}
                               aria-label={`Lançar em ${DIAS[(d.getDay() + 6) % 7]} ${ddmm(d)}, ${t.nome}`}>

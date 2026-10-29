@@ -265,7 +265,7 @@ button.icone.sair:hover { color: var(--perigo); background: #fdf1ed; border-colo
   background: var(--superficie); border: 1px solid var(--linha); border-radius: var(--raio);
   box-shadow: 0 1px 2px rgb(16 24 40 / .04);
 }
-.segmentado { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 12px; background: var(--neutro); }
+.segmentado { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 4px; border-radius: 12px; background: var(--neutro); }
 .segmentado button { padding: 8px 10px; font-size: 14px; background: transparent; color: var(--texto-suave); border-radius: 9px; }
 .segmentado button:hover { background: rgb(255 255 255 / .6); color: var(--azul); }
 .segmentado button.ativo { background: var(--superficie); color: var(--azul); box-shadow: 0 1px 3px rgb(16 24 40 / .12); }
@@ -859,3 +859,10 @@ button.hora-cab:hover { background: var(--azul-claro); }
 .selo-acao.novo { background: var(--azul-claro); color: var(--azul); }
 .selo-acao.existe { background: #e7f6ee; color: #0e7a4b; }
 .selo-acao.na_turma { background: var(--neutro); color: var(--neutro-texto); }
+
+/* ---------- locais ---------- */
+.cartao .local-txt { font-size: 12.5px; font-weight: 600; opacity: .85; }
+.cartao .local-txt::before { content: "⌖ "; }
+.semanas.compacto .cartao .local-txt { font-size: 11px; }
+.local-linha { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; font-size: 15px; }
+.local-linha .link { padding: 0; font-size: 14px; }

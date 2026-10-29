@@ -31,6 +31,8 @@ Contexto para agentes (Claude Code) trabalharem neste repositório. Leia inteiro
   turmas depois (**matrícula**, com situação Normal ou Desligado/evadido).
 - **Chamada** → por **hora-aula**: uma presença por hora-aula da aula (C = compareceu, F = faltou). Aula de 4 h com
   hora-aula de 60 min = 4 presenças. Quantidade = duração ÷ hora-aula do curso, arredondada, mínimo 1.
+- **Local** → sala/laboratório onde a aula acontece (cadastro simples: Sala 1…6, laboratórios, Cozinha Pedagógica,
+  Auditório, Biblioteca). Cada item da agenda tem um local cadastrado **ou** um "outro local" em texto livre (ou nenhum).
 - **Evento avulso** (reunião, viagem, formação, férias…): ocupa a agenda do instrutor, mas **não pertence a turma** nem abate CH de UC.
 - **Fonte dos cursos:** o **plano de curso** (PDF). Por UC: nome, CH, **indicadores**, **conhecimentos**, **habilidades**
   e **atitudes e valores**.
@@ -96,6 +98,17 @@ Padrão nacional do Senac (mesma estrutura em todos os cursos). Exemplo analisad
   Téc. Inteligência Artificial, Auxiliar de Confeitaria, Assistente Adm).
 - Entrada é **sempre PDF** (o `.docx` do Assistente de TI será convertido antes; o leitor não aceita Word).
 
+### Locais (29/10/2026)
+- Cadastro **Locais** (menu, só TEPTs): nome, ordem nas listas, ativo. Os 13 locais da unidade já vêm cadastrados.
+- Agenda tem um terceiro filtro, **Locais**: a agenda de uma sala mostra tudo que está reservado nela (para todos os usuários).
+- **TEPT**: escolhe o local no formulário de lançamento (lista com ocupados em vermelho; "Outro local (digitar)").
+  Choque de local é **aviso** (mesmo esquema de instrutor/turma: calendário, confirmação, cartão vermelho, painel).
+  Na agenda de um local, o lançamento já vem com o local marcado e pede instrutor e turma.
+- **Instrutor**: vê a agenda de qualquer local e **reserva** o local para os **próprios** itens — na agenda do local
+  (célula sem item de outra pessoa → escolhe a aula dele nesse turno) ou no detalhe da aula ("Definir local"/"Trocar").
+  Se outra pessoa já estiver no local nesse horário, o banco **bloqueia** (`definir_local`). Item de outra pessoa: só leitura.
+- O cartão mostra o local (⌖) nas agendas de instrutor e turma.
+
 ### Chamada (29/10/2026) — **ESCONDIDA nesta versão**
 > O Bryam decidiu que a chamada **não entra agora**. Tudo continua no código e no banco, mas a interface está desligada
 > pela chave **`CHAMADA_ATIVA = false`** em `lib/types.ts` (some o menu Alunos, a seção de alunos na turma e o botão
@@ -155,6 +168,7 @@ components/     Contexto.tsx (cadastros compartilhados), Modal.tsx (+ SeletorCor
                 Filtros.tsx (barra de busca + filtros das telas de cadastro: Busca, Filtro, SITUACOES)
                 Alunos.tsx (tela de alunos + EditarAluno) · AlunosTurma.tsx (alunos dentro do cadastro da turma, importação do PDF)
                 Chamada.tsx (chamada por hora-aula, aberta pelo cartão da aula)
+                Locais.tsx (cadastro de locais) · ReservarLocal.tsx (instrutor reserva local; LocalDoItem no detalhe da aula)
 lib/            supabase.ts (+ buscarTodos: pagina de 1000 em 1000), types.ts (tipos, TURNOS, CORES, minutos/fmtMin, mensagemErro), datas.ts,
                 plano.ts (corta o texto do plano em partes — função pura), pdf.ts (pdf.js no navegador),
                 frequencia.ts (lê a lista "Usuários AD" do Senac — função pura)
@@ -212,6 +226,15 @@ docs/superpowers/      desenhos (specs/) e planos (plans/)
   aulas, horas, faltas).
 - RLS: gestor tudo; instrutor lê alunos/matrículas das turmas em que dá aula e as presenças das aulas que vê.
 - Testado em PGlite (Postgres em memória) com o schema da v1: permissões por papel, validações, auditoria, views.
+
+### Locais (`supabase/manual/2026-10-29_locais.sql`, rodado à mão no SQL Editor)
+- **`locais`** (`nome` único, `ordem`, `ativo`; RLS: todos leem, gestor escreve) · `itens.local_id` (FK) e
+  `itens.local_outro` (texto), constraint `itens_um_local` (não os dois). Índice gist `(local_id, periodo)`.
+- `private.conflito_local()` (aviso). `disponibilidade_datas` ganhou `p_local` (recriada); `ocupacao_no_horario` devolve
+  também `tipo = 'local'`; `conflitos_periodo` e `ocorrencias_periodo` (recriada, nova coluna `local_id`) contam choque de local.
+- RPC **`agenda_local(local, ini, fim)`** (security definer: qualquer usuário vê as reservas do local) e
+  **`definir_local(item, local, outro)`**: gestor livre; instrutor só nos próprios itens e só com o local vazio.
+- Testado em PGlite com todas as migrações da v1 aplicadas na ordem.
 
 ### v0 (legado, não usado pela v1)
 `agenda`, `compromissos`, `editores`, `agenda_historico` continuam no banco, intactas (o site da v0 ainda lê delas até o merge).
@@ -310,8 +333,12 @@ npm run build      # gera out/
 - Projeto Integrador = UC com aulas próprias na agenda; compartilha os elementos das UCs do bloco.
 - Leitor de plano de curso aceita só PDF.
 - Chamada por hora-aula, aberta pelo cartão da agenda; aluno é cadastro único, ligado à turma por matrícula (29/10).
+- Local da aula: cadastro simples + "outro local" em texto. Choque de local é aviso para a TEPT e bloqueio para o
+  instrutor, que só reserva local vazio para as próprias aulas (29/10).
 
 ## Pendências para confirmar com o Bryam
+- **Rodar `supabase/manual/2026-10-29_locais.sql` no SQL Editor antes de mesclar o PR dos locais** (sem ele a agenda
+  não carrega: o front pede `local_id`/`local_outro` e a lista de locais).
 - Hora-aula de 50 min: 19:00–22:00 dá 3,6 → **4 presenças** (arredondado). Confirmar se é assim no Senac.
 - Limpeza dos dados de teste: SQL em `supabase/manual/2026-10-15_limpar_dados_de_teste.sql` (rodado à mão pelo Bryam;
   conferir se não sobrou usuário `@senac-agenda.test` nem curso/turma "TESTE").

@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { CHAMADA_ATIVA, Curso, Turma, UC, Usuario, eGestor } from '@/lib/types';
+import { CHAMADA_ATIVA, Curso, Local, Turma, UC, Usuario, eGestor, ordenarLocais } from '@/lib/types';
 import Login from '@/components/Login';
 import NovaSenha from '@/components/NovaSenha';
 import { Cadastros, CadastrosCtx } from '@/components/Contexto';
@@ -11,16 +11,18 @@ import Painel from '@/components/Painel';
 import Cursos from '@/components/Cursos';
 import Turmas from '@/components/Turmas';
 import Alunos from '@/components/Alunos';
+import Locais from '@/components/Locais';
 import Pessoas from '@/components/Pessoas';
 import Icone from '@/components/Icone';
 
-type Aba = 'agenda' | 'painel' | 'cursos' | 'turmas' | 'alunos' | 'pessoas';
+type Aba = 'agenda' | 'painel' | 'cursos' | 'turmas' | 'alunos' | 'locais' | 'pessoas';
 const ABAS: { id: Aba; nome: string; gestor: boolean }[] = [
   { id: 'agenda', nome: 'Agenda', gestor: false },
   { id: 'painel', nome: 'Painel', gestor: false },
   { id: 'cursos', nome: 'Cursos', gestor: true },
   { id: 'turmas', nome: 'Turmas', gestor: true },
   { id: 'alunos', nome: 'Alunos', gestor: true },
+  { id: 'locais', nome: 'Locais', gestor: true },
   { id: 'pessoas', nome: 'Pessoas', gestor: true },
 ];
 
@@ -60,13 +62,14 @@ export default function Home() {
     const eu = await supabase.from('usuarios').select('*').eq('id', session.user.id).maybeSingle();
     if (eu.error) { setErro('Falha ao carregar seu perfil.'); return; }
     if (!eu.data || !eu.data.ativo) { setDados('negado'); return; }
-    const [usuarios, cursos, ucs, turmas] = await Promise.all([
+    const [usuarios, cursos, ucs, turmas, locais] = await Promise.all([
       supabase.from('usuarios').select('*').order('nome'),
       supabase.from('cursos').select('*').order('nome'),
       supabase.from('ucs').select('*').order('numero'),
       supabase.from('turmas').select('*').order('nome'),
+      supabase.from('locais').select('*'),
     ]);
-    if (usuarios.error || cursos.error || ucs.error || turmas.error) { setErro('Falha ao carregar os cadastros.'); return; }
+    if (usuarios.error || cursos.error || ucs.error || turmas.error || locais.error) { setErro('Falha ao carregar os cadastros.'); return; }
     setErro(null);
     setDados({
       eu: eu.data as Usuario,
@@ -74,6 +77,7 @@ export default function Home() {
       cursos: cursos.data as Curso[],
       ucs: ucs.data as UC[],
       turmas: turmas.data as Turma[],
+      locais: (locais.data as Local[]).sort(ordenarLocais),
     });
   }, [session]);
 
@@ -149,6 +153,7 @@ export default function Home() {
           {atual === 'cursos' && <Cursos />}
           {atual === 'turmas' && <Turmas />}
           {atual === 'alunos' && <Alunos />}
+          {atual === 'locais' && <Locais />}
           {atual === 'pessoas' && <Pessoas />}
         </main>
       </div>

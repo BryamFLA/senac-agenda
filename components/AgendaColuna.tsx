@@ -7,9 +7,10 @@ import { indices, useCadastros } from './Contexto';
 import Grade, { Cartao } from './Grade';
 import FormItem from './FormItem';
 import DetalheAula from './DetalheAula';
+import ReservarLocal from './ReservarLocal';
 import Chamada from './Chamada';
 
-export type Modo = 'instrutor' | 'turma';
+export type Modo = 'instrutor' | 'turma' | 'local';
 export interface PainelAgenda { id: number; modo: Modo; alvo: string }
 
 interface Props {
@@ -26,7 +27,9 @@ interface Props {
   onAlterou: () => void;
 }
 
-/** Uma agenda (de um instrutor ou de uma turma). Na comparação, várias ficam lado a lado. */
+const sobrepoe = (a: Item, b: Item) => a.data === b.data && a.hora_inicio < b.hora_fim && b.hora_inicio < a.hora_fim;
+
+/** Uma agenda (de um instrutor, de uma turma ou de um local). Na comparação, várias ficam lado a lado. */
 export default function AgendaColuna({ painel, numero, ativo, comparando, semanas, mes, versao, ocorrencias, onAtivar, onFechar, onAlterou }: Props) {
   const cad = useCadastros();
   const idx = useMemo(() => indices(cad), [cad]);
@@ -38,15 +41,18 @@ export default function AgendaColuna({ painel, numero, ativo, comparando, semana
   const [erro, setErro] = useState<string | null>(null);
   const [form, setForm] = useState<{ data: Date; turno: Turno; item?: Item } | null>(null);
   const [detalhe, setDetalhe] = useState<Item | null>(null);
+  const [reserva, setReserva] = useState<{ data: Date; turno: Turno } | null>(null); // instrutor reservando o local
   const [chamada, setChamada] = useState<Item | null>(null);
   const [comChamada, setComChamada] = useState<Set<string>>(new Set()); // aulas com chamada gravada
 
   const carregar = useCallback(async () => {
     if (!alvo) { setItens([]); return; }
     setCarregando(true);
-    const q = supabase.from('itens').select(ITEM_CAMPOS)
-      .gte('data', iso(semanas[0][0])).lte('data', iso(semanas[semanas.length - 1][5]));
-    const { data, error } = await (modo === 'instrutor' ? q.eq('instrutor_id', alvo) : q.eq('turma_id', alvo));
+    const ini = iso(semanas[0][0]), fim = iso(semanas[semanas.length - 1][5]);
+    const q = supabase.from('itens').select(ITEM_CAMPOS).gte('data', ini).lte('data', fim);
+    // agenda do local vem por RPC: o instrutor também vê as reservas dos outros, para saber se a sala está livre
+    const { data, error } = await (modo === 'local' ? supabase.rpc('agenda_local', { p_local: alvo, p_ini: ini, p_fim: fim })
+      : modo === 'instrutor' ? q.eq('instrutor_id', alvo) : q.eq('turma_id', alvo));
     setCarregando(false);
     if (error) { setErro('Falha ao carregar a agenda.'); return; }
     setErro(null);
@@ -59,19 +65,35 @@ export default function AgendaColuna({ painel, numero, ativo, comparando, semana
   useEffect(() => { carregar(); }, [carregar, versao]);
 
   function cartaoBase(i: Item): Cartao {
+    const p = idx.usuario.get(i.instrutor_id);
     if (i.tipo === 'evento') {
-      return { titulo: i.titulo ?? 'Evento', sub: i.observacao, cor: i.cor ?? '#64748B', selo: i.origem === 'v0' ? 'v0' : undefined };
+      return { titulo: i.titulo ?? 'Evento', sub: modo === 'local' ? p?.nome : i.observacao, cor: i.cor ?? '#64748B',
+               selo: i.origem === 'v0' ? 'v0' : undefined };
     }
     const t = i.turma_id ? idx.turma.get(i.turma_id) : undefined;
     const u = i.uc_id ? idx.uc.get(i.uc_id) : undefined;
     const ucTxt = u ? `UC${u.numero} · ${u.nome}` : 'UC';
+    if (modo === 'local') return { titulo: t?.nome ?? 'Turma', sub: [p?.nome, ucTxt].filter(Boolean).join(' · '), cor: t?.cor ?? '#004A8D' };
     if (modo === 'turma') {
-      const p = idx.usuario.get(i.instrutor_id);
       return { titulo: ucTxt, sub: i.observacao || p?.nome, cor: p?.cor ?? '#004A8D' };
     }
     return { titulo: t?.nome ?? 'Turma', sub: i.observacao || ucTxt, cor: t?.cor ?? '#004A8D' };
   }
-  const descrever = (i: Item): Cartao => ({ ...cartaoBase(i), alerta: ocorrencias.get(i.id) ?? null });
+  const localTxt = (i: Item) => (i.local_id ? idx.local.get(i.local_id)?.nome : i.local_outro) ?? null;
+  // na agenda do local, o choque de sala é calculado aqui: o instrutor não recebe as ocorrências dos itens dos outros
+  const choqueLocal = (i: Item) => {
+    if (modo !== 'local') return null;
+    const o = itens.find((x) => x.id !== i.id && sobrepoe(x, i));
+    if (!o) return null;
+    const t = o.tipo === 'aula' ? idx.turma.get(o.turma_id ?? '') : undefined;
+    const nome = t ? t.codigo ?? t.nome : o.titulo;
+    return `Local também reservado para "${nome ?? 'item'}" (${idx.usuario.get(o.instrutor_id)?.nome ?? ''}, ${o.hora_inicio.slice(0, 5)}–${o.hora_fim.slice(0, 5)}).`;
+  };
+  const descrever = (i: Item): Cartao => ({
+    ...cartaoBase(i), alerta: ocorrencias.get(i.id) ?? choqueLocal(i), local: modo === 'local' ? null : localTxt(i),
+  });
+  // instrutor na agenda do local: só reserva em célula sem item de outra pessoa
+  const celulaLivre = (_d: Date, _t: Turno, lista: Item[]) => lista.every((i) => i.instrutor_id === cad.eu.id);
 
   async function marcar(i: Item, campo: 'material' | 'ptd') {
     const valor = campo === 'material' ? !i.material_ok : !i.ptd_ok;
@@ -112,9 +134,10 @@ export default function AgendaColuna({ painel, numero, ativo, comparando, semana
     );
   };
 
-  const nome = modo === 'instrutor' ? idx.usuario.get(alvo)?.nome : idx.turma.get(alvo)?.nome;
-  const cor = modo === 'instrutor' ? idx.usuario.get(alvo)?.cor : idx.turma.get(alvo)?.cor;
-  const rotulo = modo === 'instrutor' ? (alvo === cad.eu.id ? 'Minha agenda' : 'Agenda do instrutor') : 'Agenda da turma';
+  const nome = modo === 'instrutor' ? idx.usuario.get(alvo)?.nome : modo === 'local' ? idx.local.get(alvo)?.nome : idx.turma.get(alvo)?.nome;
+  const cor = modo === 'instrutor' ? idx.usuario.get(alvo)?.cor : modo === 'local' ? '#64748B' : idx.turma.get(alvo)?.cor;
+  const rotulo = modo === 'instrutor' ? (alvo === cad.eu.id ? 'Minha agenda' : 'Agenda do instrutor')
+    : modo === 'local' ? 'Agenda do local' : 'Agenda da turma';
 
   return (
     <section className={`agenda-coluna ${comparando ? 'comparando' : ''} ${ativo ? 'ativa' : ''}`}
@@ -143,7 +166,9 @@ export default function AgendaColuna({ painel, numero, ativo, comparando, semana
           <Grade semanas={semanas} mes={mes} itens={itens} grande={!gestor && !comparando} compacto={comparando}
                  descrever={descrever} acoes={acoes}
                  onItem={(i) => (gestor ? setForm({ data: deIso(i.data), turno: i.turno, item: i }) : setDetalhe(i))}
-                 onCelula={gestor ? (data, turno) => setForm({ data, turno }) : undefined} />
+                 onCelula={gestor ? (data, turno) => setForm({ data, turno })
+                   : modo === 'local' ? (data, turno) => setReserva({ data, turno }) : undefined}
+                 podeCelula={!gestor && modo === 'local' ? celulaLivre : undefined} />
         </div>
       )}
       {form && (
@@ -151,7 +176,10 @@ export default function AgendaColuna({ painel, numero, ativo, comparando, semana
                   onClose={() => setForm(null)} onSaved={() => { setForm(null); onAlterou(); }} />
       )}
       {chamada && <Chamada item={chamada} onClose={() => setChamada(null)} onSalvo={carregar} />}
-      {detalhe && <DetalheAula item={detalhe} alerta={ocorrencias.get(detalhe.id)} onClose={() => setDetalhe(null)} />}
+      {detalhe && <DetalheAula item={detalhe} alerta={ocorrencias.get(detalhe.id) ?? choqueLocal(detalhe) ?? undefined}
+                               onClose={() => setDetalhe(null)} onAlterou={() => { setDetalhe(null); onAlterou(); }} />}
+      {reserva && <ReservarLocal localId={alvo} data={reserva.data} turno={reserva.turno} ocupados={itens}
+                                 onClose={() => setReserva(null)} onSalvo={() => { setReserva(null); onAlterou(); }} />}
     </section>
   );
 }

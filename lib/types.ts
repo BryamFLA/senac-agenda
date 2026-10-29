@@ -48,6 +48,14 @@ export interface Turma {
   ativo: boolean;
 }
 
+/** Local da aula (sala, laboratório…). O item também pode ter um "outro local" só em texto (local_outro). */
+export interface Local {
+  id: string;
+  nome: string;
+  ordem: number;
+  ativo: boolean;
+}
+
 export interface Item {
   id: string;
   tipo: 'aula' | 'evento';
@@ -66,6 +74,8 @@ export interface Item {
   ptd_ok: boolean;
   serie_id: string | null;
   origem: 'v1' | 'v0';
+  local_id: string | null;
+  local_outro: string | null;
 }
 
 // Chamada e cadastro de alunos ficam FORA desta versão (decisão de 29/10/2026). O código e o banco estão prontos;
@@ -106,7 +116,7 @@ export interface Progresso {
 }
 
 export const ITEM_CAMPOS =
-  'id,tipo,data,hora_inicio,hora_fim,turno,instrutor_id,turma_id,uc_id,titulo,cor,trabalho,observacao,material_ok,ptd_ok,serie_id,origem';
+  'id,tipo,data,hora_inicio,hora_fim,turno,instrutor_id,turma_id,uc_id,titulo,cor,trabalho,observacao,material_ok,ptd_ok,serie_id,origem,local_id,local_outro';
 
 /** Horário padrão de cada turno — coluna da esquerda da grade. */
 export const TURNOS: { id: Turno; nome: string; inicio: string; fim: string }[] = [
@@ -135,6 +145,9 @@ export const PAPEIS: { id: Papel; nome: string }[] = [
   { id: 'admin', nome: 'Administrador' },
 ];
 
+/** Ordem dos locais nas listas: a do cadastro, depois o nome. */
+export const ordenarLocais = (a: Local, b: Local) => a.ordem - b.ordem || a.nome.localeCompare(b.nome, 'pt-BR');
+
 export const eGestor = (u: Usuario | null | undefined) => !!u && (u.papel === 'admin' || u.papel === 'tept');
 
 /** Minutos entre dois horários 'HH:MM[:SS]'. */
@@ -158,6 +171,7 @@ export function mensagemErro(e: { message?: string; code?: string } | null | und
   // as travas de choque foram trocadas por aviso; se aparecerem, falta rodar supabase/manual/2026-10-15_remover_travas_de_choque.sql
   if (msg.includes('itens_sem_choque')) return 'O banco ainda bloqueia choque de horário (falta rodar o SQL que remove as travas).';
   if (msg.includes('turmas_codigo_key')) return 'Já existe uma turma com esse código.';
+  if (msg.includes('locais_nome_unico')) return 'Já existe um local com esse nome.';
   if (msg.includes('alunos_email_unico')) return 'Já existe um aluno com esse e-mail.';
   if (msg.includes('alunos_codigo_unico')) return 'Já existe um aluno com esse código.';
   if (msg.includes('matriculas_pkey')) return 'Esse aluno já está na turma.';

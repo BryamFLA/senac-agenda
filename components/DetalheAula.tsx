@@ -4,9 +4,12 @@ import { DIAS_LONGOS, ddmm, deIso, diaSemana, hhmm } from '@/lib/datas';
 import { useCadastros } from './Contexto';
 import Modal from './Modal';
 import { ElementosUC } from './Cursos';
+import { LocalDoItem } from './ReservarLocal';
 
 /** Visão do instrutor ao clicar numa aula ou evento: dados da aula e os elementos da UC (para o PTD). */
-export default function DetalheAula({ item, alerta, onClose }: { item: Item; alerta?: string; onClose: () => void }) {
+export default function DetalheAula({ item, alerta, onClose, onAlterou }: {
+  item: Item; alerta?: string; onClose: () => void; onAlterou: () => void;
+}) {
   const cad = useCadastros();
   const d = deIso(item.data);
   const turma = cad.turmas.find((t) => t.id === item.turma_id);
@@ -20,6 +23,7 @@ export default function DetalheAula({ item, alerta, onClose }: { item: Item; ale
            subtitulo={`${DIAS_LONGOS[diaSemana(d)] ?? 'Domingo'}, ${ddmm(d)} · ${hhmm(item.hora_inicio)}–${hhmm(item.hora_fim)} (${fmtMin(minutos(item.hora_inicio, item.hora_fim))}) · ${instrutor?.nome ?? ''}`}
            onClose={onClose}>
       {alerta && <div className="alerta conflito"><strong>⚠ Conflito de horário</strong><span>{alerta}</span></div>}
+      <LocalDoItem item={item} onAlterou={onAlterou} />
       {item.observacao && <p className="nota">{item.observacao}</p>}
       {uc && (
         <div className="form">
