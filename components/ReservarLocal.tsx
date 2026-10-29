@@ -1,12 +1,10 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { ITEM_CAMPOS, Item, TURNOS, Turno, mensagemErro } from '@/lib/types';
-import { DIAS_LONGOS, ddmm, diaSemana, hhmm, iso } from '@/lib/datas';
+import { ITEM_CAMPOS, Item, TURNOS, Turno, mensagemErro, sobrepoe } from '@/lib/types';
+import { ddmm, hhmm, iso, nomeDia } from '@/lib/datas';
 import { indices, useCadastros } from './Contexto';
 import Modal from './Modal';
-
-const sobrepoe = (a: Item, b: Item) => a.data === b.data && a.hora_inicio < b.hora_fim && b.hora_inicio < a.hora_fim;
 
 /**
  * Instrutor na agenda de um local: escolhe uma aula (ou evento) dele nesse turno e reserva o local para ela.
@@ -48,7 +46,7 @@ export default function ReservarLocal({ localId, data, turno, ocupados, onClose,
 
   return (
     <Modal titulo={`Reservar ${local?.nome ?? 'local'}`}
-           subtitulo={`${DIAS_LONGOS[diaSemana(data)] ?? 'Domingo'}, ${ddmm(data)} · ${t.nome}`} onClose={onClose}
+           subtitulo={`${nomeDia(data)}, ${ddmm(data)} · ${t.nome}`} onClose={onClose}
            rodape={<><span className="flex" /><button className="secundario" onClick={onClose}>Cancelar</button>
              {!!meus?.length && <button onClick={reservar} disabled={!escolhido || salvando}>{salvando ? 'Reservando…' : 'Reservar'}</button>}</>}>
       {!meus ? <p className="muted">Carregando…</p> : !meus.length ? (

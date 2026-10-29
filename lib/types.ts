@@ -107,13 +107,20 @@ export function horasChamada(ini: string, fim: string, horaAulaMin: number): num
   return Math.max(1, Math.round(minutos(ini, fim) / horaAulaMin));
 }
 
-export interface Progresso {
-  turma_id: string;
-  uc_id: string;
-  aulas: number;
-  horas_agendadas: number;
-  horas_realizadas: number;
+/** Conflito de horário já gravado (RPC ocorrencias_periodo): pinta cartões e nomes do filtro em vermelho. */
+export interface Ocorrencia {
+  item_id: string;
+  instrutor_id: string;
+  turma_id: string | null;
+  local_id: string | null;
+  motivo: string;
 }
+
+/** Dois itens no mesmo dia com horários que se cruzam. */
+export const sobrepoe = (a: Item, b: Item) => a.data === b.data && a.hora_inicio < b.hora_fim && b.hora_inicio < a.hora_fim;
+
+/** Cor dos eventos sem cor e dos locais (que não têm cor própria). */
+export const COR_NEUTRA = '#64748B';
 
 export const ITEM_CAMPOS =
   'id,tipo,data,hora_inicio,hora_fim,turno,instrutor_id,turma_id,uc_id,titulo,cor,trabalho,observacao,material_ok,ptd_ok,serie_id,origem,local_id,local_outro';
@@ -125,13 +132,6 @@ export const TURNOS: { id: Turno; nome: string; inicio: string; fim: string }[] 
   { id: 'N', nome: 'Noite', inicio: '19:00', fim: '22:00' },
 ];
 export const DIA_TODO = { inicio: '08:00', fim: '22:00' };
-
-export const turnoInfo = (t: Turno) => TURNOS.find((x) => x.id === t)!;
-
-/** Mesma regra da coluna gerada itens.turno no banco. */
-export function turnoDoHorario(h: string): Turno {
-  return h < '12:00' ? 'M' : h < '18:00' ? 'T' : 'N';
-}
 
 /** Paleta oferecida nos cadastros (dá para escolher outra cor livremente). */
 export const CORES = [
@@ -168,8 +168,6 @@ export const fmtHoras = (h: number) => fmtMin(Math.round(h * 60));
 export function mensagemErro(e: { message?: string; code?: string } | null | undefined, padrao = 'Não foi possível salvar.'): string {
   if (!e) return padrao;
   const msg = e.message ?? '';
-  // as travas de choque foram trocadas por aviso; se aparecerem, falta rodar supabase/manual/2026-10-15_remover_travas_de_choque.sql
-  if (msg.includes('itens_sem_choque')) return 'O banco ainda bloqueia choque de horário (falta rodar o SQL que remove as travas).';
   if (msg.includes('turmas_codigo_key')) return 'Já existe uma turma com esse código.';
   if (msg.includes('locais_nome_unico')) return 'Já existe um local com esse nome.';
   if (msg.includes('alunos_email_unico')) return 'Já existe um aluno com esse e-mail.';

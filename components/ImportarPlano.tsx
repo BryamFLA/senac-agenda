@@ -1,10 +1,11 @@
 'use client';
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { invocar, supabase } from '@/lib/supabase';
 import { fmtHoras, mensagemErro } from '@/lib/types';
 import { segmentarPlano } from '@/lib/plano';
 import { useCadastros } from './Contexto';
 import Modal from './Modal';
+import { normal } from './Filtros';
 
 interface UcRascunho {
   numero: number;
@@ -30,17 +31,9 @@ interface Rascunho {
 }
 
 const VAZIO: Rascunho = { nome: '', eixo: null, segmento: null, ch_total: 0, codigo_dn: null, cbo: null, hora_aula_min: 60, ucs: [] };
-const normal = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const chave = (s: string) => normal(s).replace(/[^a-z0-9]+/g, ' ').trim(); // compara nomes ignorando pontuação
 
-async function lerParte(corpo: object): Promise<any> {
-  const { data, error } = await supabase.functions.invoke('ler-plano', { body: corpo });
-  if (error) {
-    let msg = error.message;
-    try { msg = (await (error as { context: Response }).context.json()).erro ?? msg; } catch { /* resposta sem JSON */ }
-    throw new Error(msg);
-  }
-  return data;
-}
+const lerParte = (corpo: object) => invocar<any>('ler-plano', corpo);
 
 /** Roda as tarefas com no máximo `n` ao mesmo tempo. */
 async function emLotes<T>(tarefas: (() => Promise<T>)[], n: number, aoTerminar: () => void): Promise<PromiseSettledResult<T>[]> {
@@ -90,8 +83,8 @@ export default function ImportarPlano({ manual, onClose }: { manual: boolean; on
       });
       // a tabela (geral) dá tipo e "integra"; o detalhamento dá nome, CH e elementos
       const ucs = detalhes.map((d) => {
-        const g = geral.ucs.find((u) => u.numero === d.numero && (!d.nome || normal(u.nome).slice(0, 15) === normal(d.nome).slice(0, 15)))
-          ?? geral.ucs.find((u) => d.nome && (normal(u.nome).includes(normal(d.nome)) || normal(d.nome).includes(normal(u.nome))));
+        const g = geral.ucs.find((u) => u.numero === d.numero && (!d.nome || chave(u.nome).slice(0, 15) === chave(d.nome).slice(0, 15)))
+          ?? geral.ucs.find((u) => d.nome && (chave(u.nome).includes(chave(d.nome)) || chave(d.nome).includes(chave(u.nome))));
         const pi = g?.tipo === 'projeto_integrador' || /projeto\s+integrador/i.test(d.nome);
         return {
           ...d,

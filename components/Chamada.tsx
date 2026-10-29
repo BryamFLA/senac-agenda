@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Aluno, Item, SituacaoMatricula, eGestor, horasChamada, mensagemErro } from '@/lib/types';
-import { DIAS_LONGOS, ddmm, deIso, diaSemana, hhmm, iso } from '@/lib/datas';
+import { ddmm, deIso, hhmm, iso, nomeDia } from '@/lib/datas';
 import { useCadastros } from './Contexto';
 import Modal from './Modal';
 
@@ -98,7 +98,7 @@ export default function Chamada({ item, onClose, onSalvo }: { item: Item; onClos
   }, [linhas, marcas]);
 
   const d = deIso(item.data);
-  const sub = `${uc ? `UC${uc.numero} · ${uc.nome} · ` : ''}${DIAS_LONGOS[diaSemana(d)] ?? 'Domingo'}, ${ddmm(d)} · `
+  const sub = `${uc ? `UC${uc.numero} · ${uc.nome} · ` : ''}${nomeDia(d)}, ${ddmm(d)} · `
     + `${hhmm(item.hora_inicio)}–${fim} · ${n} hora${n > 1 ? 's' : ''}-aula de ${horaAula} min`;
 
   return (

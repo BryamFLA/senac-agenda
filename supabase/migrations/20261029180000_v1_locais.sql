@@ -1,4 +1,4 @@
--- Executado à mão pelo Bryam no SQL Editor do Supabase (o MCP estava desconectado).
+-- Aplicada à mão no SQL Editor em 29/10/2026 (MCP desconectado): não consta em supabase_migrations do remoto.
 -- Local da aula: cadastro de locais, local em cada item da agenda, agenda por local e conflito de local.
 --   TEPT: choque de local é AVISO (como instrutor/turma).
 --   Instrutor: só reserva local para os próprios itens, e só se ninguém mais estiver no local nesse horário (BLOQUEIA).

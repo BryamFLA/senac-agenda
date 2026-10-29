@@ -1,5 +1,5 @@
 'use client';
-import { DIAS, MESES, diaSemana, diasUteisDoMes, iso } from '@/lib/datas';
+import { DIAS, MESES, deIso, diaSemana, diasUteisDoMes, iso } from '@/lib/datas';
 import type { Usuario } from '@/lib/types';
 import { ItemPainel, fmtH, horasDoDia } from './dados';
 import { useDica } from './Dica';
@@ -72,7 +72,7 @@ export default function Carga({ instrutores, itens, conflitos, ano, mes }: {
             <div className="calor" style={{ gridTemplateColumns: `minmax(150px, 190px) repeat(${dias.length}, minmax(22px, 1fr)) minmax(170px, 210px)` }}>
               <span className="calor-canto">Instrutor</span>
               {dias.map((d) => {
-                const dw = diaSemana(new Date(Number(d.slice(0, 4)), Number(d.slice(5, 7)) - 1, Number(d.slice(8))));
+                const dw = diaSemana(deIso(d));
                 return <span key={d} className={`calor-dia ${dw === 0 ? 'seg' : ''}`}><small>{DIAS[dw]?.toLowerCase()}</small>{Number(d.slice(8))}</span>;
               })}
               <span className="calor-canto">Aulas · eventos no mês</span>
@@ -81,7 +81,7 @@ export default function Carga({ instrutores, itens, conflitos, ano, mes }: {
                   <span className="calor-nome"><span className="bolinha-inline" style={{ background: l.u.cor }} /> {l.u.nome}</span>
                   {l.porDia.map((d) => (
                     <span key={d.data}
-                          className={`calor-cel ${d.conflito ? 'conflito' : ''} ${d.ausente && !d.trabalho ? 'ausente' : ''} ${diaSemana(new Date(Number(d.data.slice(0, 4)), Number(d.data.slice(5, 7)) - 1, Number(d.data.slice(8)))) === 0 ? 'seg' : ''}`}
+                          className={`calor-cel ${d.conflito ? 'conflito' : ''} ${d.ausente && !d.trabalho ? 'ausente' : ''} ${diaSemana(deIso(d.data)) === 0 ? 'seg' : ''}`}
                           style={d.trabalho > 0 ? { background: corHoras(d.trabalho) } : undefined}
                           aria-label={`${l.u.nome}, ${d.data.slice(8)}/${d.data.slice(5, 7)}: ${d.trabalho ? fmtH(d.trabalho) : d.ausente ?? 'livre'}`}
                           {...dica(`${l.u.nome} · ${d.data.slice(8)}/${d.data.slice(5, 7)}`, [

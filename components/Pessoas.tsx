@@ -1,16 +1,13 @@
 'use client';
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { invocar, supabase } from '@/lib/supabase';
 import { CORES, PAPEIS, Papel, Usuario, mensagemErro } from '@/lib/types';
 import { useCadastros } from './Contexto';
 import Modal, { SeletorCor } from './Modal';
 import { BarraFiltros, Busca, Filtro, SITUACOES, confereSituacao, normal } from './Filtros';
 
-async function chamar(corpo: object): Promise<string | null> {
-  const { error } = await supabase.functions.invoke('usuarios', { body: corpo });
-  if (!error) return null;
-  try { return (await (error as { context: Response }).context.json()).erro ?? error.message; } catch { return error.message; }
-}
+/** Edge Function usuarios: devolve null se deu certo, ou a mensagem de erro. */
+const chamar = (corpo: object) => invocar('usuarios', corpo).then(() => null, (e: Error) => e.message);
 
 function senhaAleatoria(): string {
   const a = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';

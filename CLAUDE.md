@@ -2,9 +2,10 @@
 
 Contexto para agentes (Claude Code) trabalharem neste repositório. Leia inteiro antes de mudar algo.
 
-> **Momento do projeto (15/10/2026):** a **v1** (distribuição de aulas e carga horária para a unidade inteira, com
-> interfaces de TEPTs e Instrutores) está **em produção** em `agenda.bryam.com.br` (PR #2 mesclado na `main`).
-> As tabelas da v0 continuam no banco, intactas, só como legado. Desenho: `docs/superpowers/specs/2026-10-08-v1-design.md`.
+> **Momento do projeto (29/10/2026):** a **v1** (distribuição de aulas e carga horária para a unidade inteira, com
+> interfaces de TEPTs e Instrutores) está **em produção** em `agenda.bryam.com.br` (PR #2). O PR #3 traz os **locais da
+> aula** e a **chamada (escondida)**; o banco já tem tudo. Próximas rodadas: revisão de design e testes de segurança.
+> As tabelas da v0 continuam no banco só como legado. Desenho: `docs/superpowers/specs/2026-10-08-v1-design.md`.
 
 ## Quem e para quê
 - **Dono:** Bryam Assolini, instrutor de TI no SENAC Francisco Beltrão (PR), unidade UEPT-16.
@@ -26,7 +27,7 @@ Contexto para agentes (Claude Code) trabalharem neste repositório. Leia inteiro
 - **CH "meio fixa"**: as cargas horárias (da UC, da aula) têm valor padrão, mas podem ser editadas.
 - **Horário e CH na agenda:** a aula guarda **hora inicial e hora final**; a CH que ela abate da UC é a **duração de relógio**
   (fim − início). A **hora-aula** do curso (60 min na maioria, 50 min em alguns) é cadastrada no curso, mas só importa
-  para a **chamada** (futuro) — não entra nos cálculos da agenda.
+  para a **chamada** (pronta, mas escondida) — não entra nos cálculos da agenda.
 - **Aluno** → cadastro único (nome, e-mail institucional, CodAluno do Senac). Existe sem turma e entra em uma ou mais
   turmas depois (**matrícula**, com situação Normal ou Desligado/evadido).
 - **Chamada** → por **hora-aula**: uma presença por hora-aula da aula (C = compareceu, F = faltou). Aula de 4 h com
@@ -39,7 +40,7 @@ Contexto para agentes (Claude Code) trabalharem neste repositório. Leia inteiro
 
 ## Requisitos da v1
 ### Interface das TEPTs
-- Tela de agenda com **filtro por instrutor ou por turma**.
+- Tela de agenda com **filtro por instrutor, turma ou local**.
 - Lançamento direto na agenda:
   - Na agenda de um **instrutor** → o formulário pede a **turma**.
   - Na agenda de uma **turma** → o formulário pede o **instrutor**.
@@ -131,7 +132,7 @@ Padrão nacional do Senac (mesma estrutura em todos os cursos). Exemplo analisad
 - Integração com **OneDrive** e **Canva** para material e PTD (o cartão passa a linkar os arquivos).
 - **Relatório de frequência** (a chamada já existe; falta o relatório).
 - **Feriados da unidade** como cadastro único que bloqueia todos os instrutores e turmas.
-- **Ensalamento inteligente** (labs e salas de aula).
+- **Ensalamento inteligente** (sugerir sala automaticamente; o cadastro de locais e o conflito de local já existem).
 - **Rateio de ponto** conectado ao sistema do SENAC (Senior).
 - Agentes externos (Python, Mac mini M4) que leem a agenda: PTDs semanais (Claude API), slides no Canva, rateio.
 
@@ -155,7 +156,8 @@ Plano free do Supabase pode pausar o projeto após dias sem uso — se o site pa
 ## Estrutura (v1)
 ```
 app/            layout.tsx, page.tsx (sessão, perfil, cadastros; **sem topo**: menu lateral com logo, seções por hash
-                #agenda/#painel/#cursos/#turmas/#pessoas e, embaixo, usuário + Sair), globals.css (todo o estilo)
+                #agenda/#painel/#cursos/#turmas/#locais/#pessoas (#alunos só com CHAMADA_ATIVA) e, embaixo, usuário + Sair),
+                globals.css (todo o estilo)
 components/     Contexto.tsx (cadastros compartilhados), Modal.tsx (+ SeletorCor), Icone.tsx (ícones do menu), Login.tsx, NovaSenha.tsx
                 Agenda.tsx (mês, filtro à direita compartilhado, botão + flutuante para comparar até 2 agendas, nomes com
                 conflito em vermelho) · AgendaColuna.tsx (uma agenda: grade, Material/PTD, lançamento/edição) · Grade.tsx (vários itens por célula)
@@ -169,19 +171,22 @@ components/     Contexto.tsx (cadastros compartilhados), Modal.tsx (+ SeletorCor
                 Alunos.tsx (tela de alunos + EditarAluno) · AlunosTurma.tsx (alunos dentro do cadastro da turma, importação do PDF)
                 Chamada.tsx (chamada por hora-aula, aberta pelo cartão da aula)
                 Locais.tsx (cadastro de locais) · ReservarLocal.tsx (instrutor reserva local; LocalDoItem no detalhe da aula)
-lib/            supabase.ts (+ buscarTodos: pagina de 1000 em 1000), types.ts (tipos, TURNOS, CORES, minutos/fmtMin, mensagemErro), datas.ts,
+lib/            supabase.ts (+ buscarTodos: pagina de 1000 em 1000), types.ts (tipos, TURNOS, CORES, COR_NEUTRA, sobrepoe,
+                minutos/fmtMin, mensagemErro, CHAMADA_ATIVA), datas.ts (iso/deIso, nomeDia…),
                 plano.ts (corta o texto do plano em partes — função pura), pdf.ts (pdf.js no navegador),
                 frequencia.ts (lê a lista "Usuários AD" do Senac — função pura)
-supabase/migrations/   SQL versionado — nomes batem com as versões aplicadas no remoto
+supabase/migrations/   todo o SQL do banco, em ordem. As versões batem com o remoto, menos as 3 aplicadas à mão no SQL
+                       Editor (remover_travas_de_choque, chamada, locais), que não constam em supabase_migrations
 supabase/functions/    usuarios/, ler-plano/ (v1) · sync-gcal/ (v0, pausado; testes: cd lá e `npx -y deno@2.9.6 test`)
 scripts/testar_plano.mjs  confere a segmentação contra PDFs reais:
                           `node --experimental-strip-types scripts/testar_plano.mjs "<plano.pdf>"`
+scripts/testar_frequencia.mjs  o mesmo para a lista "Usuários AD" (alunos da turma)
 scripts/import_excel.py   importação única da planilha (v0, já executada; não rodar de novo)
 docs/superpowers/      desenhos (specs/) e planos (plans/)
 ```
 
 ## Banco (schema `public`)
-### v1 (migrações `20261008172403_v1_schema`, `20261008172438_v1_importar_v0`, `20261015133617_v1_livres_no_horario`, `20261015135258_v1_conflitos_funcoes`, `20261015140134_v1_ocorrencias_periodo`, `20261015163907_v1_andamento_view`)
+### v1 (migrações `20261008172403_v1_schema` … `20261029180000_v1_locais`, em `supabase/migrations/`)
 - **`usuarios`** — `id` = `auth.users.id`, `email`, `nome`, `papel` (`admin` | `tept` | `instrutor`), `leciona` (aparece como
   instrutor), `cor` (pinta as aulas na agenda da turma), `ativo`. Gestor = admin ou tept. Bryam = admin + leciona.
   Novo acesso: pela tela Pessoas (Edge Function `usuarios`); só admin cria/edita admin.
@@ -200,13 +205,12 @@ docs/superpowers/      desenhos (specs/) e planos (plans/)
   **diferido** `itens_jornada` (10 h/dia pela **união** dos horários e 11 h de interjornada, só itens `trabalho`) —
   esses **bloqueiam**. Choque de horário **não bloqueia**: `private.motivo_conflito()` só gera o aviso.
   Funções: `private.motivo_bloqueio()` (coerência + RH), `private.motivo_jornada()`, `private.motivo_conflito()`.
-  As exclusion constraints antigas `itens_sem_choque_*` são removidas por `supabase/manual/2026-10-15_remover_travas_de_choque.sql`
-  (rodado à mão no SQL Editor; o MCP recusa `drop`).
+  As exclusion constraints antigas `itens_sem_choque_*` saíram em `20261015135300_v1_remover_travas_de_choque`.
   `app.ignorar_regras = on` (set_config local) desliga as regras — usado **só** na importação da v0.
-- **RPCs:** `disponibilidade_datas(datas[], ini, fim, instrutor, tipo, turma, uc, trabalho, ignorar)` → por data,
+- **RPCs:** `disponibilidade_datas(datas[], ini, fim, instrutor, tipo, turma, uc, trabalho, ignorar, local)` → por data,
   `motivo` (bloqueio) e `conflito` (aviso) — mini calendário (gestor); `ocupacao_no_horario(data, ini, fim, ignorar)` →
-  o mesmo por instrutor e por turma — listas do formulário (gestor); `conflitos_periodo(ini, fim)` → conflitos já gravados
-  (painel; filtra o que quem chama pode ver); `ocorrencias_periodo(ini, fim)` → o mesmo com `instrutor_id`/`turma_id`
+  o mesmo por instrutor, turma e local — listas do formulário (gestor); `conflitos_periodo(ini, fim)` → conflitos já gravados
+  (painel; filtra o que quem chama pode ver); `ocorrencias_periodo(ini, fim)` → o mesmo com `instrutor_id`/`turma_id`/`local_id`
   (cartões vermelhos e nomes em vermelho no filtro da agenda); `marcar_item(id, 'material'|'ptd', bool)` (dono da aula
   ou gestor); `salvar_curso(json)` (curso + UCs numa transação).
 - **RLS:** `private.papel()/e_gestor()/e_usuario()`. Gestor lê/escreve tudo. Instrutor lê os próprios itens + aulas das
@@ -214,7 +218,7 @@ docs/superpowers/      desenhos (specs/) e planos (plans/)
 - **Dados da v0:** os 535 registros viraram **eventos do Bryam com `origem = 'v0'`** (selo "v0" no cartão; feriado/férias/
   folga com `trabalho = false`). A TEPT converte em aula pela edição (Evento → Aula + turma + UC).
 
-### Chamada (`supabase/manual/2026-10-29_chamada.sql`, rodado à mão pelo Bryam no SQL Editor em 29/10 — o MCP estava desconectado)
+### Chamada (migração `20261029120000_v1_chamada`)
 - **`alunos`** (`nome`, `email` único opcional, `codigo` = CodAluno único opcional, `ativo`) · **`matriculas`** (PK
   `turma_id`+`aluno_id`, `situacao` normal|desligado) · **`presencas`** (PK `item_id`+`aluno_id`, `horas boolean[]`,
   uma posição por hora-aula; FK **sem cascade**: aula com chamada não pode ser apagada).
@@ -227,7 +231,7 @@ docs/superpowers/      desenhos (specs/) e planos (plans/)
 - RLS: gestor tudo; instrutor lê alunos/matrículas das turmas em que dá aula e as presenças das aulas que vê.
 - Testado em PGlite (Postgres em memória) com o schema da v1: permissões por papel, validações, auditoria, views.
 
-### Locais (`supabase/manual/2026-10-29_locais.sql`, rodado à mão no SQL Editor)
+### Locais (migração `20261029180000_v1_locais`)
 - **`locais`** (`nome` único, `ordem`, `ativo`; RLS: todos leem, gestor escreve) · `itens.local_id` (FK) e
   `itens.local_outro` (texto), constraint `itens_um_local` (não os dois). Índice gist `(local_id, periodo)`.
 - `private.conflito_local()` (aviso). `disponibilidade_datas` ganhou `p_local` (recriada); `ocupacao_no_horario` devolve
@@ -237,8 +241,8 @@ docs/superpowers/      desenhos (specs/) e planos (plans/)
 - Testado em PGlite com todas as migrações da v1 aplicadas na ordem.
 
 ### v0 (legado, não usado pela v1)
-`agenda`, `compromissos`, `editores`, `agenda_historico` continuam no banco, intactas (o site da v0 ainda lê delas até o merge).
-Depois da virada podem virar somente leitura; não apagar sem o Bryam pedir.
+`agenda`, `compromissos`, `editores`, `agenda_historico` continuam no banco; a v1 não lê delas (só o espelho do Google,
+pausado). Não apagar sem o Bryam pedir.
 
 ## Convenções
 - **Turnos:** Manhã 08:00–12:00 · Tarde 13:30–17:30 · Noite 19:00–22:00 (horário padrão; a aula pode ter horário próprio).
@@ -284,7 +288,10 @@ npm run build      # gera out/
 - **Previews de PR usam o banco de produção**: editar dados num preview altera a agenda real. Cuidado redobrado
   durante a v1 — migrações destrutivas exigem backup/conferência antes.
 - Migrações do Supabase são **manuais** (via MCP `apply_migration`); a esteira cobre só o front. `main` sem proteção de branch.
-  Todo SQL aplicado no remoto também vira arquivo em `supabase/migrations/` com a mesma versão.
+  Todo SQL aplicado no remoto também vira arquivo em `supabase/migrations/` com a mesma versão. Sem MCP (ou quando ele
+  recusa `drop`/`delete`), o Bryam roda o arquivo no SQL Editor; a primeira linha do arquivo registra isso.
+- Antes de aplicar, testar o SQL em **PGlite** (Postgres em memória, `@electric-sql/pglite` + `btree_gist`) com todas as
+  migrações em ordem, simulando `auth.uid()` por `request.jwt.claims` e `set local role authenticated`.
 - Edge Functions: MCP `deploy_edge_function` com **`import_map_path: "deno.json"`**; `usuarios` e `ler-plano` com
   `verify_jwt: true`. Checar antes com `npx -y deno@2.9.6 check index.ts` dentro da pasta da função.
 - Testar regras do banco sem sujar produção: bloco `do $$ … raise exception 'RESULTADO: %' … $$` (o erro final desfaz tudo);
@@ -301,21 +308,16 @@ npm run build      # gera out/
 - **Na v1:** decidir se volta (provavelmente por instrutor, apontando para o modelo novo de aulas) ou se é aposentado.
 - Recuperação de senha por e-mail não é confiável (Supabase sem SMTP próprio); o Bryam redefine senhas pelo painel.
 
-## Status da v1 (08/10/2026)
-- [x] Banco, regras (choque, 10 h/dia, 11 h), RLS por papel, histórico, RPCs — testados com blocos SQL que desfazem tudo
-- [x] Importação da v0 (535 itens como eventos `origem v0`, 3 usuários)
-- [x] Telas: agenda TEPT (filtro, lançamento com mini calendário, livres por turno, CH da UC, edição/série), agenda do
-      instrutor (Material/PTD, detalhe com elementos da UC, agenda das turmas), painel, cursos/UCs, turmas, pessoas
-- [x] Edge Functions `usuarios` e `ler-plano` publicadas; segmentação do PDF conferida com 5 planos reais
-- [x] Testado no navegador (Edge + Playwright, dev server) com usuário de teste: cadastros, lançamento, bloqueios,
-      instrutor, criação de acesso, importação até a chamada da IA
+## Status (29/10/2026)
+- [x] v1 em produção (agenda, lançamento com mini calendário, painel, cadastros, leitor de plano, Material/PTD)
+- [x] Locais da aula e chamada (escondida) no PR #3; SQL das duas já aplicado no banco
 - [ ] `ANTHROPIC_API_KEY` nas secrets (sem ela o leitor de PDF responde "não configurada"); primeira leitura real de um plano
-- [x] Merge na `main` (15/10/2026) — v1 no ar para as coordenadoras
 
 ## Próximas etapas (em ordem)
-1. Bryam cadastra `ANTHROPIC_API_KEY` e testa a importação de um plano de curso real.
-2. Avisar as coordenadoras: eventos "v0" são a agenda antiga e podem ser convertidos em aula; cadastrar cursos e turmas reais.
-3. Decidir o destino do espelho no Google Calendar (hoje lê a tabela `agenda` da v0).
+1. Mesclar o PR #3 (locais) depois de testar na prévia.
+2. Revisão de design e testes de segurança (RLS, RPCs security definer, Edge Functions).
+3. Bryam cadastra `ANTHROPIC_API_KEY` e testa a importação de um plano de curso real.
+4. Decidir o destino do espelho no Google Calendar (hoje lê a tabela `agenda` da v0).
 
 ## Decisões já tomadas (out/2026)
 - Limite do RH é **diário** (10 h/dia) + **interjornada de 11 h**, não semanal/mensal.
@@ -337,11 +339,7 @@ npm run build      # gera out/
   instrutor, que só reserva local vazio para as próprias aulas (29/10).
 
 ## Pendências para confirmar com o Bryam
-- **Rodar `supabase/manual/2026-10-29_locais.sql` no SQL Editor antes de mesclar o PR dos locais** (sem ele a agenda
-  não carrega: o front pede `local_id`/`local_outro` e a lista de locais).
-- Hora-aula de 50 min: 19:00–22:00 dá 3,6 → **4 presenças** (arredondado). Confirmar se é assim no Senac.
-- Limpeza dos dados de teste: SQL em `supabase/manual/2026-10-15_limpar_dados_de_teste.sql` (rodado à mão pelo Bryam;
-  conferir se não sobrou usuário `@senac-agenda.test` nem curso/turma "TESTE").
+- Hora-aula de 50 min na chamada: 19:00–22:00 dá 3,6 → **4 presenças** (arredondado). Confirmar quando a chamada voltar.
 
 ## Contexto externo
 - Arquivos do SENAC: `D:\SENAC` (clone do OneDrive institucional; estrutura Curso → Turma → UC).

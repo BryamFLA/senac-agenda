@@ -1,8 +1,8 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { CORES, DIA_TODO, Item, TURNOS, Turno, fmtMin, mensagemErro, minutos } from '@/lib/types';
-import { DIAS_LONGOS, ddmm, deIso, diaSemana, diasUteisDoMes, hhmm, iso } from '@/lib/datas';
+import { COR_NEUTRA, CORES, DIA_TODO, Item, TURNOS, Turno, fmtMin, mensagemErro, minutos } from '@/lib/types';
+import { ddmm, deIso, diasUteisDoMes, hhmm, iso, nomeDia } from '@/lib/datas';
 import { useCadastros } from './Contexto';
 import Modal, { SeletorCor } from './Modal';
 import MiniCalendario from './MiniCalendario';
@@ -31,7 +31,7 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
   const [turmaId, setTurmaId] = useState(item?.turma_id ?? (modo === 'turma' ? alvoId : ''));
   const [ucId, setUcId] = useState(item?.uc_id ?? '');
   const [titulo, setTitulo] = useState(item?.titulo ?? '');
-  const [cor, setCor] = useState(item?.cor ?? '#64748B');
+  const [cor, setCor] = useState(item?.cor ?? COR_NEUTRA);
   const [trabalho, setTrabalho] = useState(item?.trabalho ?? true);
   const [inicio, setInicio] = useState(item ? hhmm(item.hora_inicio) : t0.inicio);
   const [fim, setFim] = useState(item ? hhmm(item.hora_fim) : t0.fim);
@@ -223,7 +223,7 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
 
   return (
     <Modal largo={!editando}
-           titulo={editando ? `${DIAS_LONGOS[diaSemana(dDia)] ?? 'Domingo'}, ${ddmm(dDia)}` : 'Lançar na agenda'}
+           titulo={editando ? `${nomeDia(dDia)}, ${ddmm(dDia)}` : 'Lançar na agenda'}
            subtitulo={editando ? (item.origem === 'v0' ? 'Importado da agenda antiga — dá para converter em aula' : 'Editar') :
              fixoInstrutor ? `Agenda de ${instrutor?.nome ?? ''}` : localAgenda ? `Agenda do local ${localAgenda.nome}` : `Agenda da turma ${turma?.nome ?? ''}`}
            onClose={onClose}

@@ -1,5 +1,5 @@
 // Cálculos do painel: tudo derivado da view `andamento`, dos itens do mês e das ocorrências (conflitos).
-import type { Curso, Turma, UC, Usuario } from '@/lib/types';
+import type { Curso, Turma, UC } from '@/lib/types';
 import { minutos } from '@/lib/types';
 
 export interface LinhaAndamento {
@@ -15,7 +15,6 @@ export interface ItemPainel {
   trabalho: boolean; material_ok: boolean; ptd_ok: boolean;
 }
 
-export interface Ocorrencia { item_id: string; instrutor_id: string; turma_id: string | null; motivo: string }
 
 /** Cores de status (reservadas: nunca usadas como série) — sempre com ícone + texto. */
 export const STATUS = {
@@ -118,4 +117,3 @@ export function fmtH(x: number): string {
   return mm ? `${hh}h${String(mm).padStart(2, '0')}` : `${hh}h`;
 }
 export const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 100) : 0);
-export const nomeUsuario = (us: Usuario[], id: string) => us.find((u) => u.id === id)?.nome ?? '—';

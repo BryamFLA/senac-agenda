@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { CHAMADA_ATIVA, ITEM_CAMPOS, Item, Turno, eGestor, mensagemErro } from '@/lib/types';
+import { CHAMADA_ATIVA, COR_NEUTRA, ITEM_CAMPOS, Item, Turno, eGestor, mensagemErro, sobrepoe } from '@/lib/types';
 import { deIso, iso } from '@/lib/datas';
 import { indices, useCadastros } from './Contexto';
 import Grade, { Cartao } from './Grade';
@@ -27,7 +27,16 @@ interface Props {
   onAlterou: () => void;
 }
 
-const sobrepoe = (a: Item, b: Item) => a.data === b.data && a.hora_inicio < b.hora_fim && b.hora_inicio < a.hora_fim;
+/** Nome, cor e rótulo de uma agenda (topo da página e cabeçalho de cada coluna na comparação). */
+export function descreverAgenda(modo: Modo, alvo: string, idx: ReturnType<typeof indices>, euId: string) {
+  if (modo === 'instrutor') {
+    const u = idx.usuario.get(alvo);
+    return { nome: u?.nome, cor: u?.cor, rotulo: alvo === euId ? 'Minha agenda' : 'Agenda do instrutor' };
+  }
+  if (modo === 'local') return { nome: idx.local.get(alvo)?.nome, cor: alvo ? COR_NEUTRA : undefined, rotulo: 'Agenda do local' };
+  const t = idx.turma.get(alvo);
+  return { nome: t?.nome, cor: t?.cor, rotulo: 'Agenda da turma' };
+}
 
 /** Uma agenda (de um instrutor, de uma turma ou de um local). Na comparação, várias ficam lado a lado. */
 export default function AgendaColuna({ painel, numero, ativo, comparando, semanas, mes, versao, ocorrencias, onAtivar, onFechar, onAlterou }: Props) {
@@ -67,7 +76,7 @@ export default function AgendaColuna({ painel, numero, ativo, comparando, semana
   function cartaoBase(i: Item): Cartao {
     const p = idx.usuario.get(i.instrutor_id);
     if (i.tipo === 'evento') {
-      return { titulo: i.titulo ?? 'Evento', sub: modo === 'local' ? p?.nome : i.observacao, cor: i.cor ?? '#64748B',
+      return { titulo: i.titulo ?? 'Evento', sub: modo === 'local' ? p?.nome : i.observacao, cor: i.cor ?? COR_NEUTRA,
                selo: i.origem === 'v0' ? 'v0' : undefined };
     }
     const t = i.turma_id ? idx.turma.get(i.turma_id) : undefined;
@@ -134,10 +143,7 @@ export default function AgendaColuna({ painel, numero, ativo, comparando, semana
     );
   };
 
-  const nome = modo === 'instrutor' ? idx.usuario.get(alvo)?.nome : modo === 'local' ? idx.local.get(alvo)?.nome : idx.turma.get(alvo)?.nome;
-  const cor = modo === 'instrutor' ? idx.usuario.get(alvo)?.cor : modo === 'local' ? '#64748B' : idx.turma.get(alvo)?.cor;
-  const rotulo = modo === 'instrutor' ? (alvo === cad.eu.id ? 'Minha agenda' : 'Agenda do instrutor')
-    : modo === 'local' ? 'Agenda do local' : 'Agenda da turma';
+  const { nome, cor, rotulo } = descreverAgenda(modo, alvo, idx, cad.eu.id);
 
   return (
     <section className={`agenda-coluna ${comparando ? 'comparando' : ''} ${ativo ? 'ativa' : ''}`}

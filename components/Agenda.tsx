@@ -1,18 +1,14 @@
 'use client';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { eGestor } from '@/lib/types';
+import { COR_NEUTRA, Ocorrencia, eGestor } from '@/lib/types';
 import { MESES, iso, semanasDoMes } from '@/lib/datas';
 import { indices, useCadastros } from './Contexto';
-import AgendaColuna, { Modo, PainelAgenda } from './AgendaColuna';
+import AgendaColuna, { Modo, PainelAgenda, descreverAgenda } from './AgendaColuna';
+import { normal } from './Filtros';
 import Icone from './Icone';
 
 const MAX_AGENDAS = 2;
-const normal = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-
-interface Ocorrencia { item_id: string; instrutor_id: string; turma_id: string | null; local_id: string | null; motivo: string }
-
-const COR_LOCAL = '#64748B';
 
 export default function Agenda() {
   const cad = useCadastros();
@@ -107,18 +103,13 @@ export default function Agenda() {
         .map((u) => ({ id: u.id, nome: u.nome, sub: u.id === cad.eu.id ? 'Você' : null, cor: u.cor }))
     : filtroModo === 'local'
     ? cad.locais.filter((l) => l.ativo && (!q || normal(l.nome).includes(q)))
-        .map((l) => ({ id: l.id, nome: l.nome, sub: null, cor: COR_LOCAL }))
+        .map((l) => ({ id: l.id, nome: l.nome, sub: null, cor: COR_NEUTRA }))
     : turmas.filter((t) => !q || normal(`${t.nome} ${t.codigo ?? ''} ${idx.curso.get(t.curso_id)?.nome ?? ''}`).includes(q))
         .map((t) => ({ id: t.id, nome: t.codigo ?? t.nome, sub: idx.curso.get(t.curso_id)?.nome ?? null, cor: t.cor }));
   const comOcorrencia = lista.filter((x) => contagem.get(x.id)).length;
 
   const p0 = paineis[0];
-  const nome0 = p0.modo === 'instrutor' ? idx.usuario.get(p0.alvo)?.nome
-    : p0.modo === 'local' ? idx.local.get(p0.alvo)?.nome : idx.turma.get(p0.alvo)?.nome;
-  const cor0 = p0.modo === 'instrutor' ? idx.usuario.get(p0.alvo)?.cor
-    : p0.modo === 'local' ? (p0.alvo ? COR_LOCAL : undefined) : idx.turma.get(p0.alvo)?.cor;
-  const rotulo0 = p0.modo === 'instrutor' ? (p0.alvo === cad.eu.id ? 'Minha agenda' : 'Agenda do instrutor')
-    : p0.modo === 'local' ? 'Agenda do local' : 'Agenda da turma';
+  const { nome: nome0, cor: cor0, rotulo: rotulo0 } = descreverAgenda(p0.modo, p0.alvo, idx, cad.eu.id);
   // o instrutor sempre tem o filtro: pelo menos os locais (vê a agenda de qualquer sala)
   const mostrarFiltro = gestor || minhasTurmas.length > 0 || comparando || cad.locais.length > 0;
 

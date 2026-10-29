@@ -1,4 +1,4 @@
--- Executado à mão pelo Bryam no SQL Editor do Supabase (o MCP estava desconectado).
+-- Aplicada à mão no SQL Editor em 29/10/2026 (MCP desconectado): não consta em supabase_migrations do remoto.
 -- Chamada por hora-aula: cadastro de alunos, matrícula na turma e presença por aula.
 -- Só cria objetos novos; não altera nada da agenda.
 begin;

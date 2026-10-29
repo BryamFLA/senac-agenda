@@ -229,13 +229,6 @@ button.icone.sair:hover { color: var(--perigo); background: #fdf1ed; border-colo
   display: grid; gap: 14px; padding: 16px; border-radius: 10px;
   background: #f8fafc; border: 1px solid var(--linha);
 }
-.select-cor { position: relative; }
-.select-cor select { padding-left: 38px; }
-.bolinha {
-  position: absolute; left: 13px; top: 50%; transform: translateY(-50%);
-  width: 14px; height: 14px; border-radius: 50%; pointer-events: none;
-  box-shadow: inset 0 0 0 1px rgb(0 0 0 / .08);
-}
 .opcional { font-weight: 400; color: var(--texto-suave); }
 .cores { display: flex; flex-wrap: wrap; gap: 8px; }
 .cor {

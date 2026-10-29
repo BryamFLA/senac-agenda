@@ -1,11 +1,11 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { eGestor } from '@/lib/types';
+import { Ocorrencia, eGestor } from '@/lib/types';
 import { MESES, addDays, iso } from '@/lib/datas';
 import { useCadastros } from './Contexto';
 import { ProvedorDica } from './painel/Dica';
-import { ItemPainel, LinhaAndamento, Ocorrencia, fmtH, pct, resumirTurmas } from './painel/dados';
+import { ItemPainel, LinhaAndamento, fmtH, pct, resumirTurmas } from './painel/dados';
 import { Kpi } from './painel/Partes';
 import Conflitos, { Conflito } from './painel/Conflitos';
 import Andamento from './painel/Andamento';

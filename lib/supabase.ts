@@ -23,3 +23,12 @@ export async function buscarTodos<T>(
     if (!data || data.length < 1000) return { data: tudo, error: null };
   }
 }
+
+/** Chama uma Edge Function; se falhar, lança Error com a mensagem em português que a função devolve em `erro`. */
+export async function invocar<T = unknown>(funcao: string, corpo: object): Promise<T> {
+  const { data, error } = await supabase.functions.invoke(funcao, { body: corpo });
+  if (!error) return data as T;
+  let msg = error.message;
+  try { msg = (await (error as { context: Response }).context.json()).erro ?? msg; } catch { /* resposta sem JSON */ }
+  throw new Error(msg);
+}
