@@ -10,3 +10,16 @@ if (!url || !key) {
 export const supabase = createClient(url, key, {
   auth: { persistSession: true, autoRefreshToken: true },
 });
+
+/** O PostgREST devolve no máximo 1000 linhas por consulta: busca em páginas até acabar. */
+export async function buscarTodos<T>(
+  consulta: (de: number, ate: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+): Promise<{ data: T[]; error: { message: string } | null }> {
+  const tudo: T[] = [];
+  for (let de = 0; ; de += 1000) {
+    const { data, error } = await consulta(de, de + 999);
+    if (error) return { data: tudo, error };
+    tudo.push(...(data ?? []));
+    if (!data || data.length < 1000) return { data: tudo, error: null };
+  }
+}

@@ -68,6 +68,31 @@ export interface Item {
   origem: 'v1' | 'v0';
 }
 
+export interface Aluno {
+  id: string;
+  nome: string;
+  email: string | null; // institucional
+  codigo: string | null; // CodAluno do Senac
+  ativo: boolean;
+}
+
+export type SituacaoMatricula = 'normal' | 'desligado';
+export const SITUACOES_MATRICULA: { id: SituacaoMatricula; nome: string }[] = [
+  { id: 'normal', nome: 'Normal' },
+  { id: 'desligado', nome: 'Desligado (evadido)' },
+];
+
+export interface Matricula {
+  turma_id: string;
+  aluno_id: string;
+  situacao: SituacaoMatricula;
+}
+
+/** Presenças da aula = duração ÷ hora-aula do curso, arredondado, no mínimo 1 (mesma conta de private.horas_chamada). */
+export function horasChamada(ini: string, fim: string, horaAulaMin: number): number {
+  return Math.max(1, Math.round(minutos(ini, fim) / horaAulaMin));
+}
+
 export interface Progresso {
   turma_id: string;
   uc_id: string;
@@ -129,6 +154,10 @@ export function mensagemErro(e: { message?: string; code?: string } | null | und
   // as travas de choque foram trocadas por aviso; se aparecerem, falta rodar supabase/manual/2026-10-15_remover_travas_de_choque.sql
   if (msg.includes('itens_sem_choque')) return 'O banco ainda bloqueia choque de horário (falta rodar o SQL que remove as travas).';
   if (msg.includes('turmas_codigo_key')) return 'Já existe uma turma com esse código.';
+  if (msg.includes('alunos_email_unico')) return 'Já existe um aluno com esse e-mail.';
+  if (msg.includes('alunos_codigo_unico')) return 'Já existe um aluno com esse código.';
+  if (msg.includes('matriculas_pkey')) return 'Esse aluno já está na turma.';
+  if (msg.includes('presencas_item_id_fkey')) return 'Esta aula já tem chamada feita; não dá para apagar.';
   if (msg.includes('ucs_numero_unico')) return 'Já existe uma UC com esse número no curso.';
   if (e.code === '23503') return 'Não dá para apagar: há registros ligados a este item.';
   if (e.code === 'P0001' && msg) return msg;

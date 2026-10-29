@@ -27,6 +27,10 @@ Contexto para agentes (Claude Code) trabalharem neste repositório. Leia inteiro
 - **Horário e CH na agenda:** a aula guarda **hora inicial e hora final**; a CH que ela abate da UC é a **duração de relógio**
   (fim − início). A **hora-aula** do curso (60 min na maioria, 50 min em alguns) é cadastrada no curso, mas só importa
   para a **chamada** (futuro) — não entra nos cálculos da agenda.
+- **Aluno** → cadastro único (nome, e-mail institucional, CodAluno do Senac). Existe sem turma e entra em uma ou mais
+  turmas depois (**matrícula**, com situação Normal ou Desligado/evadido).
+- **Chamada** → por **hora-aula**: uma presença por hora-aula da aula (C = compareceu, F = faltou). Aula de 4 h com
+  hora-aula de 60 min = 4 presenças. Quantidade = duração ÷ hora-aula do curso, arredondada, mínimo 1.
 - **Evento avulso** (reunião, viagem, formação, férias…): ocupa a agenda do instrutor, mas **não pertence a turma** nem abate CH de UC.
 - **Fonte dos cursos:** o **plano de curso** (PDF). Por UC: nome, CH, **indicadores**, **conhecimentos**, **habilidades**
   e **atitudes e valores**.
@@ -92,9 +96,19 @@ Padrão nacional do Senac (mesma estrutura em todos os cursos). Exemplo analisad
   Téc. Inteligência Artificial, Auxiliar de Confeitaria, Assistente Adm).
 - Entrada é **sempre PDF** (o `.docx` do Assistente de TI será convertido antes; o leitor não aceita Word).
 
+### Chamada (29/10/2026)
+- Cadastro de **alunos** (tela Alunos, só TEPTs) e alunos da turma no **cadastro da turma** (busca + "cadastrar novo";
+  cada mudança grava na hora; aluno com chamada não sai da turma, vira "Desligado").
+- Botão **"Importar lista de frequência (PDF)"** na turma: por enquanto só recebe e lê o texto do PDF; a identificação
+  automática dos alunos **ainda vai ser feita** (próxima etapa, junto com o Bryam).
+- A chamada abre pelo **cartão da aula na agenda** (terceiro botão, ao lado de Material/PTD): laranja = aula de hoje ou
+  passada sem chamada; verde = feita; apagado = aula futura (a chamada abre no dia da aula).
+- Grava o **instrutor da aula** ou a coordenação. Desligado aparece em laranja e começa com falta; aluno normal começa presente.
+- Cabeçalho de cada hora marca/desmarca a turma toda; ⇄ inverte a linha do aluno. Coluna "Faltas" = total na turma.
+
 ### Fora da v1 (futuro — não construir agora, mas não fechar portas)
 - Integração com **OneDrive** e **Canva** para material e PTD (o cartão passa a linkar os arquivos).
-- **Chamada por aula** com relatório (aqui a hora-aula de 50/60 min passa a importar).
+- **Relatório de frequência** (a chamada já existe; falta o relatório) e leitura automática da lista de frequência em PDF.
 - **Feriados da unidade** como cadastro único que bloqueia todos os instrutores e turmas.
 - **Ensalamento inteligente** (labs e salas de aula).
 - **Rateio de ponto** conectado ao sistema do SENAC (Senior).
@@ -131,7 +145,9 @@ components/     Contexto.tsx (cadastros compartilhados), Modal.tsx (+ SeletorCor
                 Preparo, Matriz; dados.ts = cálculos; Partes.tsx = Secao/Kpi/Medidor/Selo; Dica.tsx = tooltip)
                 Cursos.tsx (+ ElementosUC, edição de UC) · ImportarPlano.tsx (PDF → IA → revisão) · Turmas.tsx · Pessoas.tsx
                 Filtros.tsx (barra de busca + filtros das telas de cadastro: Busca, Filtro, SITUACOES)
-lib/            supabase.ts, types.ts (tipos, TURNOS, CORES, minutos/fmtMin, mensagemErro), datas.ts,
+                Alunos.tsx (tela de alunos + EditarAluno) · AlunosTurma.tsx (alunos dentro do cadastro da turma, botão do PDF)
+                Chamada.tsx (chamada por hora-aula, aberta pelo cartão da aula)
+lib/            supabase.ts (+ buscarTodos: pagina de 1000 em 1000), types.ts (tipos, TURNOS, CORES, minutos/fmtMin, mensagemErro), datas.ts,
                 plano.ts (corta o texto do plano em partes — função pura), pdf.ts (pdf.js no navegador)
 supabase/migrations/   SQL versionado — nomes batem com as versões aplicadas no remoto
 supabase/functions/    usuarios/, ler-plano/ (v1) · sync-gcal/ (v0, pausado; testes: cd lá e `npx -y deno@2.9.6 test`)
@@ -174,6 +190,19 @@ docs/superpowers/      desenhos (specs/) e planos (plans/)
   turmas em que dá aula (`private.minhas_turmas()`), não escreve direto (só via `marcar_item`). Sem cadastro ativo: nada.
 - **Dados da v0:** os 535 registros viraram **eventos do Bryam com `origem = 'v0'`** (selo "v0" no cartão; feriado/férias/
   folga com `trabalho = false`). A TEPT converte em aula pela edição (Evento → Aula + turma + UC).
+
+### Chamada (`supabase/manual/2026-10-29_chamada.sql`, rodado à mão no SQL Editor — o MCP estava desconectado)
+- **`alunos`** (`nome`, `email` único opcional, `codigo` = CodAluno único opcional, `ativo`) · **`matriculas`** (PK
+  `turma_id`+`aluno_id`, `situacao` normal|desligado) · **`presencas`** (PK `item_id`+`aluno_id`, `horas boolean[]`,
+  uma posição por hora-aula; FK **sem cascade**: aula com chamada não pode ser apagada).
+- `private.horas_chamada(ini, fim, hora_aula)` (mesma conta de `horasChamada()` em `lib/types.ts`).
+- RPC **`salvar_chamada(item, registros jsonb)`**: dono da aula ou gestor; só a partir do dia da aula; só alunos
+  matriculados; nº de horas tem de bater. Escrita em `presencas` só por ela (sem policy de insert/update).
+- Trigger `presencas_audit` grava no mesmo `historico` da aula (antes/depois com `aluno_id`).
+- Views (security_invoker): **`chamadas`** (por aula: alunos, horas, faltas, feita_em) e **`frequencia`** (turma × aluno:
+  aulas, horas, faltas).
+- RLS: gestor tudo; instrutor lê alunos/matrículas das turmas em que dá aula e as presenças das aulas que vê.
+- Testado em PGlite (Postgres em memória) com o schema da v1: permissões por papel, validações, auditoria, views.
 
 ### v0 (legado, não usado pela v1)
 `agenda`, `compromissos`, `editores`, `agenda_historico` continuam no banco, intactas (o site da v0 ainda lê delas até o merge).
@@ -271,8 +300,13 @@ npm run build      # gera out/
 - Toda turma faz o curso completo (sem turma de qualificação intermediária).
 - Projeto Integrador = UC com aulas próprias na agenda; compartilha os elementos das UCs do bloco.
 - Leitor de plano de curso aceita só PDF.
+- Chamada por hora-aula, aberta pelo cartão da agenda; aluno é cadastro único, ligado à turma por matrícula (29/10).
 
 ## Pendências para confirmar com o Bryam
+- **Rodar `supabase/manual/2026-10-29_chamada.sql` no SQL Editor antes de publicar a chamada** (sem as tabelas, a tela
+  de alunos dá erro e a chamada não abre).
+- Lista de frequência em PDF: o Bryam vai mandar um exemplo para fazer a identificação automática dos alunos.
+- Hora-aula de 50 min: 19:00–22:00 dá 3,6 → **4 presenças** (arredondado). Confirmar se é assim no Senac.
 - Limpeza dos dados de teste: SQL em `supabase/manual/2026-10-15_limpar_dados_de_teste.sql` (rodado à mão pelo Bryam;
   conferir se não sobrou usuário `@senac-agenda.test` nem curso/turma "TESTE").
 

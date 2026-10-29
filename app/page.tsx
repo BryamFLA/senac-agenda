@@ -10,15 +10,17 @@ import Agenda from '@/components/Agenda';
 import Painel from '@/components/Painel';
 import Cursos from '@/components/Cursos';
 import Turmas from '@/components/Turmas';
+import Alunos from '@/components/Alunos';
 import Pessoas from '@/components/Pessoas';
 import Icone from '@/components/Icone';
 
-type Aba = 'agenda' | 'painel' | 'cursos' | 'turmas' | 'pessoas';
+type Aba = 'agenda' | 'painel' | 'cursos' | 'turmas' | 'alunos' | 'pessoas';
 const ABAS: { id: Aba; nome: string; gestor: boolean }[] = [
   { id: 'agenda', nome: 'Agenda', gestor: false },
   { id: 'painel', nome: 'Painel', gestor: false },
   { id: 'cursos', nome: 'Cursos', gestor: true },
   { id: 'turmas', nome: 'Turmas', gestor: true },
+  { id: 'alunos', nome: 'Alunos', gestor: true },
   { id: 'pessoas', nome: 'Pessoas', gestor: true },
 ];
 
@@ -146,6 +148,7 @@ export default function Home() {
           {atual === 'painel' && <Painel />}
           {atual === 'cursos' && <Cursos />}
           {atual === 'turmas' && <Turmas />}
+          {atual === 'alunos' && <Alunos />}
           {atual === 'pessoas' && <Pessoas />}
         </main>
       </div>

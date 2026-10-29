@@ -7,6 +7,7 @@ import { indices, useCadastros } from './Contexto';
 import Grade, { Cartao } from './Grade';
 import FormItem from './FormItem';
 import DetalheAula from './DetalheAula';
+import Chamada from './Chamada';
 
 export type Modo = 'instrutor' | 'turma';
 export interface PainelAgenda { id: number; modo: Modo; alvo: string }
@@ -37,6 +38,8 @@ export default function AgendaColuna({ painel, numero, ativo, comparando, semana
   const [erro, setErro] = useState<string | null>(null);
   const [form, setForm] = useState<{ data: Date; turno: Turno; item?: Item } | null>(null);
   const [detalhe, setDetalhe] = useState<Item | null>(null);
+  const [chamada, setChamada] = useState<Item | null>(null);
+  const [comChamada, setComChamada] = useState<Set<string>>(new Set()); // aulas com chamada gravada
 
   const carregar = useCallback(async () => {
     if (!alvo) { setItens([]); return; }
@@ -48,6 +51,9 @@ export default function AgendaColuna({ painel, numero, ativo, comparando, semana
     if (error) { setErro('Falha ao carregar a agenda.'); return; }
     setErro(null);
     setItens(data as Item[]);
+    const aulas = (data as Item[]).filter((i) => i.tipo === 'aula').map((i) => i.id);
+    const ch = aulas.length ? await supabase.from('chamadas').select('item_id').in('item_id', aulas) : { data: [] };
+    setComChamada(new Set((ch.data ?? []).map((r) => r.item_id as string)));
   }, [alvo, modo, semanas]);
 
   useEffect(() => { carregar(); }, [carregar, versao]);
@@ -75,7 +81,11 @@ export default function AgendaColuna({ painel, numero, ativo, comparando, semana
   }
 
   const podeMarcar = (i: Item) => gestor || i.instrutor_id === cad.eu.id;
-  const acoes = (i: Item) => (
+  const hoje = iso(new Date());
+  const acoes = (i: Item) => {
+    const feita = comChamada.has(i.id), futura = i.data > hoje;
+    const pendente = !feita && !futura && podeMarcar(i);
+    return (
     <>
       <button type="button" className={`marcacao ${i.material_ok ? 'ok' : ''}`} disabled={!podeMarcar(i)}
               onClick={() => marcar(i, 'material')} aria-pressed={i.material_ok}
@@ -89,8 +99,15 @@ export default function AgendaColuna({ painel, numero, ativo, comparando, semana
         <span aria-hidden="true">{i.ptd_ok ? '✓' : '○'}</span> <span className="marcacao-txt">PTD</span>
         <span className="marcacao-curto" aria-hidden="true">P</span>
       </button>
+      <button type="button" className={`marcacao ${feita ? 'ok' : pendente ? 'pendente' : futura ? 'futura' : ''}`} disabled={futura}
+              onClick={() => setChamada(i)}
+              title={futura ? 'A chamada abre no dia da aula' : feita ? 'Chamada feita: clique para ver ou corrigir' : 'Fazer a chamada'}>
+        <span aria-hidden="true">{feita ? '✓' : '○'}</span> <span className="marcacao-txt">Chamada</span>
+        <span className="marcacao-curto" aria-hidden="true">C</span>
+      </button>
     </>
-  );
+    );
+  };
 
   const nome = modo === 'instrutor' ? idx.usuario.get(alvo)?.nome : idx.turma.get(alvo)?.nome;
   const cor = modo === 'instrutor' ? idx.usuario.get(alvo)?.cor : idx.turma.get(alvo)?.cor;
@@ -130,6 +147,7 @@ export default function AgendaColuna({ painel, numero, ativo, comparando, semana
         <FormItem modo={modo} alvoId={alvo} data={form.data} turno={form.turno} item={form.item}
                   onClose={() => setForm(null)} onSaved={() => { setForm(null); onAlterou(); }} />
       )}
+      {chamada && <Chamada item={chamada} onClose={() => setChamada(null)} onSalvo={carregar} />}
       {detalhe && <DetalheAula item={detalhe} alerta={ocorrencias.get(detalhe.id)} onClose={() => setDetalhe(null)} />}
     </section>
   );
