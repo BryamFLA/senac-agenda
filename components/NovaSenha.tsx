@@ -17,12 +17,14 @@ export default function NovaSenha({ onPronto }: { onPronto: () => void }) {
   return (
     <main className="login">
       <form onSubmit={salvar} className="login-card">
+        <span className="marca-icone grande" aria-hidden="true" />
         <h1>Criar nova senha</h1>
+        <p className="muted">Use pelo menos 8 caracteres.</p>
         <label className="campo">Nova senha
-          <input type="password" autoComplete="new-password" value={senha}
+          <input type="password" autoComplete="new-password" minLength={8} value={senha}
                  onChange={(e) => setSenha(e.target.value)} required />
         </label>
-        {erro && <p className="erro">{erro}</p>}
+        {erro && <p className="erro" role="alert">{erro}</p>}
         <button type="submit">Salvar senha</button>
       </form>
     </main>

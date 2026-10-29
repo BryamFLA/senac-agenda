@@ -14,6 +14,7 @@ import Alunos from '@/components/Alunos';
 import Locais from '@/components/Locais';
 import Pessoas from '@/components/Pessoas';
 import Icone from '@/components/Icone';
+import Avisos from '@/components/Avisos';
 
 type Aba = 'agenda' | 'painel' | 'cursos' | 'turmas' | 'alunos' | 'locais' | 'pessoas';
 const ABAS: { id: Aba; nome: string; gestor: boolean }[] = [
@@ -27,6 +28,15 @@ const ABAS: { id: Aba; nome: string; gestor: boolean }[] = [
 ];
 
 type Dados = Omit<Cadastros, 'recarregar'>;
+
+function Carregando() {
+  return (
+    <main className="centro muted" aria-busy="true">
+      <span className="girando" aria-hidden="true" />
+      Carregando…
+    </main>
+  );
+}
 
 export default function Home() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -88,7 +98,7 @@ export default function Home() {
     [dados, carregar],
   );
 
-  if (session === undefined) return <main className="centro muted">Carregando…</main>;
+  if (session === undefined) return <Carregando />;
   if (recuperando && session) return <NovaSenha onPronto={() => setRecuperando(false)} />;
   if (!session) return <Login />;
   if (dados === 'negado') {
@@ -99,7 +109,7 @@ export default function Home() {
       </main>
     );
   }
-  if (!ctx) return <main className="centro muted">{erro ?? 'Carregando…'}</main>;
+  if (!ctx) return erro ? <main className="centro"><p className="erro">{erro}</p></main> : <Carregando />;
 
   const gestor = eGestor(ctx.eu);
   const abas = ABAS.filter((a) => (gestor || !a.gestor) && (CHAMADA_ATIVA || a.id !== 'alunos'));
@@ -156,6 +166,7 @@ export default function Home() {
           {atual === 'locais' && <Locais />}
           {atual === 'pessoas' && <Pessoas />}
         </main>
+        <Avisos />
       </div>
     </CadastrosCtx.Provider>
   );

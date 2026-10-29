@@ -9,6 +9,7 @@ import FormItem from './FormItem';
 import DetalheAula from './DetalheAula';
 import ReservarLocal from './ReservarLocal';
 import Chamada from './Chamada';
+import Icone from './Icone';
 
 export type Modo = 'instrutor' | 'turma' | 'local';
 export interface PainelAgenda { id: number; modo: Modo; alvo: string }
@@ -121,13 +122,13 @@ export default function AgendaColuna({ painel, numero, ativo, comparando, semana
       <button type="button" className={`marcacao ${i.material_ok ? 'ok' : ''}`} disabled={!podeMarcar(i)}
               onClick={() => marcar(i, 'material')} aria-pressed={i.material_ok}
               title={i.material_ok ? 'Material pronto' : 'Material pendente'}>
-        <span aria-hidden="true">{i.material_ok ? '✓' : '○'}</span> <span className="marcacao-txt">Material</span>
+        <Icone nome={i.material_ok ? 'check' : 'circulo'} tamanho={13} /> <span className="marcacao-txt">Material</span>
         <span className="marcacao-curto" aria-hidden="true">M</span>
       </button>
       <button type="button" className={`marcacao ${i.ptd_ok ? 'ok' : ''}`} disabled={!podeMarcar(i)}
               onClick={() => marcar(i, 'ptd')} aria-pressed={i.ptd_ok}
               title={i.ptd_ok ? 'PTD pronto' : 'PTD pendente'}>
-        <span aria-hidden="true">{i.ptd_ok ? '✓' : '○'}</span> <span className="marcacao-txt">PTD</span>
+        <Icone nome={i.ptd_ok ? 'check' : 'circulo'} tamanho={13} /> <span className="marcacao-txt">PTD</span>
         <span className="marcacao-curto" aria-hidden="true">P</span>
       </button>
       {/* chamada escondida nesta versão: ver CHAMADA_ATIVA em lib/types.ts */}
@@ -135,7 +136,7 @@ export default function AgendaColuna({ painel, numero, ativo, comparando, semana
       <button type="button" className={`marcacao ${feita ? 'ok' : pendente ? 'pendente' : futura ? 'futura' : ''}`} disabled={futura}
               onClick={() => setChamada(i)}
               title={futura ? 'A chamada abre no dia da aula' : feita ? 'Chamada feita: clique para ver ou corrigir' : 'Fazer a chamada'}>
-        <span aria-hidden="true">{feita ? '✓' : '○'}</span> <span className="marcacao-txt">Chamada</span>
+        <Icone nome={feita ? 'check' : 'circulo'} tamanho={13} /> <span className="marcacao-txt">Chamada</span>
         <span className="marcacao-curto" aria-hidden="true">C</span>
       </button>
       )}
@@ -157,7 +158,7 @@ export default function AgendaColuna({ painel, numero, ativo, comparando, semana
             <h2>{nome ?? 'Escolha no filtro'}</h2>
           </div>
           {onFechar && (
-            <button type="button" className="fechar" onClick={(e) => { e.stopPropagation(); onFechar(); }} aria-label={`Fechar agenda ${numero}`}>×</button>
+            <button type="button" className="fechar" onClick={(e) => { e.stopPropagation(); onFechar(); }} aria-label={`Fechar agenda ${numero}`}><Icone nome="fechar" tamanho={20} /></button>
           )}
         </header>
       )}

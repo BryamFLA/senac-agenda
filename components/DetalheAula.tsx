@@ -3,6 +3,7 @@ import { Item, fmtMin, minutos } from '@/lib/types';
 import { ddmm, deIso, hhmm, nomeDia } from '@/lib/datas';
 import { useCadastros } from './Contexto';
 import Modal from './Modal';
+import Icone from './Icone';
 import { ElementosUC } from './Cursos';
 import { LocalDoItem } from './ReservarLocal';
 
@@ -22,7 +23,7 @@ export default function DetalheAula({ item, alerta, onClose, onAlterou }: {
     <Modal largo titulo={item.tipo === 'aula' ? `${turma?.nome ?? 'Aula'}` : item.titulo ?? 'Evento'}
            subtitulo={`${nomeDia(d)}, ${ddmm(d)} · ${hhmm(item.hora_inicio)}–${hhmm(item.hora_fim)} (${fmtMin(minutos(item.hora_inicio, item.hora_fim))}) · ${instrutor?.nome ?? ''}`}
            onClose={onClose}>
-      {alerta && <div className="alerta conflito"><strong>⚠ Conflito de horário</strong><span>{alerta}</span></div>}
+      {alerta && <div className="alerta conflito"><strong className="alerta-titulo"><Icone nome="alerta" tamanho={16} /> Conflito de horário</strong><span>{alerta}</span></div>}
       <LocalDoItem item={item} onAlterou={onAlterou} />
       {item.observacao && <p className="nota">{item.observacao}</p>}
       {uc && (

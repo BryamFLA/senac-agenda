@@ -48,7 +48,7 @@ export default function ListaEscolha({ rotulo, itens, valor, onChange, situacao,
           const conflito = !bloqueado && !!s?.conflito;
           const sel = valor === x.id;
           return (
-            <li key={x.id}>
+            <li key={x.id} role="none">
               <button type="button" role="option" aria-selected={sel} disabled={bloqueado && !sel}
                       className={`escolha-item ${sel ? 'sel' : ''} ${bloqueado ? 'bloq' : conflito ? 'conflito' : ''}`}
                       onClick={() => onChange(x.id)}>
@@ -57,12 +57,12 @@ export default function ListaEscolha({ rotulo, itens, valor, onChange, situacao,
                   <span className="escolha-nome">{x.nome}{x.sub && <small> · {x.sub}</small>}</span>
                   {(bloqueado || conflito) && <small className="escolha-motivo">{semData(bloqueado ? s!.motivo : s!.conflito)}</small>}
                 </span>
-                {sel && <span className="escolha-check" aria-hidden="true">✓</span>}
+                {sel && <span className="escolha-check"><Icone nome="check" tamanho={16} /></span>}
               </button>
             </li>
           );
         })}
-        {!lista.length && <li className="muted pequeno filtro-vazio">Nada encontrado.</li>}
+        {!lista.length && <li role="none" className="muted pequeno filtro-vazio">Nada encontrado.</li>}
       </ul>
       {resumo && <span className="dica">{resumo}</span>}
     </div>

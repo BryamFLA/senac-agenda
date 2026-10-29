@@ -41,8 +41,8 @@ export default function Login() {
           <input type="password" autoComplete="current-password" value={senha}
                  onChange={(e) => setSenha(e.target.value)} required />
         </label>
-        {erro && <p className="erro">{erro}</p>}
-        {aviso && <p className="aviso">{aviso}</p>}
+        {erro && <p className="erro" role="alert">{erro}</p>}
+        {aviso && <p className="aviso" role="status">{aviso}</p>}
         <button type="submit" disabled={carregando}>{carregando ? 'Entrando…' : 'Entrar'}</button>
         <button type="button" className="link" onClick={esqueci}>Esqueci minha senha</button>
       </form>

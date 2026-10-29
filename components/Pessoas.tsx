@@ -5,6 +5,8 @@ import { CORES, PAPEIS, Papel, Usuario, mensagemErro } from '@/lib/types';
 import { useCadastros } from './Contexto';
 import Modal, { SeletorCor } from './Modal';
 import { BarraFiltros, Busca, Filtro, SITUACOES, confereSituacao, normal } from './Filtros';
+import Icone from './Icone';
+import { avisar } from './Avisos';
 
 /** Edge Function usuarios: devolve null se deu certo, ou a mensagem de erro. */
 const chamar = (corpo: object) => invocar('usuarios', corpo).then(() => null, (e: Error) => e.message);
@@ -39,7 +41,7 @@ export default function Pessoas() {
           <p className="muted">Quem acessa o sistema. TEPTs montam a agenda; instrutores veem a própria agenda e marcam material e PTD.</p>
         </div>
         <span className="flex" />
-        <button onClick={() => setEditar('novo')}>+ Novo acesso</button>
+        <button className="com-icone" onClick={() => setEditar('novo')}><Icone nome="mais" tamanho={18} /> Novo acesso</button>
       </header>
       <BarraFiltros total={lista.length} rotulo={['pessoa', 'pessoas']}>
         <Busca valor={busca} onChange={setBusca} placeholder="Buscar por nome ou e-mail" />
@@ -55,7 +57,8 @@ export default function Pessoas() {
           <thead><tr><th>Nome</th><th>E-mail</th><th>Papel</th><th>Dá aula</th><th>Situação</th></tr></thead>
           <tbody>
             {lista.map((u) => (
-              <tr key={u.id} className="clicavel" onClick={() => setEditar(u)}>
+              <tr key={u.id} className="clicavel" onClick={() => setEditar(u)} tabIndex={0} aria-label={`Editar ${u.nome}`}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditar(u); } }}>
                 <td><span className="bolinha-inline" style={{ background: u.cor }} /> {u.nome}</td>
                 <td className="muted">{u.email}</td>
                 <td>{nomePapel(u.papel)}</td>
@@ -103,6 +106,7 @@ function EditarPessoa({ usuario, onClose }: { usuario: Usuario | null; onClose: 
     setSalvando(false);
     if (error) return setErro(mensagemErro(error));
     await cad.recarregar();
+    avisar('Dados salvos.');
     onClose();
   }
 
@@ -125,7 +129,7 @@ function EditarPessoa({ usuario, onClose }: { usuario: Usuario | null; onClose: 
   }
 
   return (
-    <Modal titulo={usuario ? usuario.nome : 'Novo acesso'} subtitulo={usuario?.email} onClose={onClose}
+    <Modal titulo={usuario ? usuario.nome : 'Novo acesso'} subtitulo={usuario?.email} onClose={onClose} erro={erro}
            rodape={<><span className="flex" /><button className="secundario" onClick={onClose}>Cancelar</button>
              <button onClick={salvar} disabled={salvando || bloqueado}>{salvando ? 'Salvando…' : usuario ? 'Salvar' : 'Criar acesso'}</button></>}>
       {bloqueado && <p className="muted">Só o administrador altera este usuário.</p>}
@@ -149,8 +153,7 @@ function EditarPessoa({ usuario, onClose }: { usuario: Usuario | null; onClose: 
           {usuario && <button type="button" className="secundario" onClick={trocarSenha} disabled={bloqueado || !senha}>Trocar</button>}
         </div>
       </div>
-      {erro && <p className="erro">{erro}</p>}
-      {aviso && <p className="aviso">{aviso}</p>}
+      {aviso && <p className="aviso" role="status">{aviso}</p>}
     </Modal>
   );
 }

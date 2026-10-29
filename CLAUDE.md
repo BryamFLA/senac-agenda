@@ -158,7 +158,8 @@ Plano free do Supabase pode pausar o projeto após dias sem uso — se o site pa
 app/            layout.tsx, page.tsx (sessão, perfil, cadastros; **sem topo**: menu lateral com logo, seções por hash
                 #agenda/#painel/#cursos/#turmas/#locais/#pessoas (#alunos só com CHAMADA_ATIVA) e, embaixo, usuário + Sair),
                 globals.css (todo o estilo)
-components/     Contexto.tsx (cadastros compartilhados), Modal.tsx (+ SeletorCor), Icone.tsx (ícones do menu), Login.tsx, NovaSenha.tsx
+components/     Contexto.tsx (cadastros compartilhados), Modal.tsx (+ SeletorCor), Icone.tsx (todos os ícones SVG), Login.tsx, NovaSenha.tsx
+                Avisos.tsx (avisar() = aviso "salvo" no rodapé da tela; confirmar() = confirmação no visual do sistema)
                 Agenda.tsx (mês, filtro à direita compartilhado, botão + flutuante para comparar até 2 agendas, nomes com
                 conflito em vermelho) · AgendaColuna.tsx (uma agenda: grade, Material/PTD, lançamento/edição) · Grade.tsx (vários itens por célula)
                 FormItem.tsx (lançar/editar: aula|evento, mini calendário, CH da UC, avisos de conflito, apagar série)
@@ -255,6 +256,16 @@ pausado). Não apagar sem o Bryam pedir.
 - Telas de cadastro: largura total, barra de filtros no topo (busca + filtros + contador). Cursos: eixo, segmento,
   situação. Turmas: curso, situação. Pessoas: papel, dá aula, situação.
 - CSS: a classe `.marca` é do logo; os botões Material/PTD usam `.marcacao`.
+- **Padrão de interface (revisão de design, 29/10):**
+  - Ícones só pelo `Icone.tsx` (SVG de traço) — nada de caracteres como ‹ › × ⚠ ✓ ○ ⌖ fazendo papel de ícone.
+  - `Modal`: cabeçalho e rodapé fixos, corpo rola; o erro vai na prop `erro` (aparece junto dos botões). Foco preso
+    dentro e devolvido ao fechar; Esc fecha só o modal de cima. Com `rodape` (formulário) clicar fora **não** fecha.
+    No celular (≤600px) vira folha que sobe do rodapé.
+  - Depois de gravar: `avisar('…')`. Antes de apagar: `await confirmar({ titulo, texto, acao, perigo: true })` — não usar `confirm()`.
+  - Camadas: usar as variáveis `--z-*` do `:root` (modal 40, aviso 50, tooltip 60), não números soltos.
+  - Foco visível global (`:focus-visible`, contorno laranja), `prefers-reduced-motion` respeitado, alvos maiores em
+    `pointer: coarse` e "+ adicionar" sempre visível sem mouse (`hover: none`). Texto pequeno com contraste ≥ 4,5:1.
+  - Painel: atalhos e indicadores rolam até a seção por `irPara()` (não trocar o `#hash`, que escolhe a página).
 - Painel (dashboard): segue a skill `dataviz` — filtros numa linha fixa no topo valendo para todas as seções; cores com
   função única (azul SENAC realizado, `#86b6ef` agendado, trilho cinza; rampas azuis ordinais a partir do degrau 250,
   validadas com o script da skill; status bom/atenção/sério/crítico só com ícone + texto); tooltip em toda marca e

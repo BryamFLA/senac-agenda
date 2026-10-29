@@ -7,6 +7,8 @@ import { useCadastros } from './Contexto';
 import Modal, { SeletorCor } from './Modal';
 import { BarraFiltros, Busca, Filtro, SITUACOES, confereSituacao, normal } from './Filtros';
 import AlunosTurma from './AlunosTurma';
+import Icone from './Icone';
+import { avisar } from './Avisos';
 
 /** A turma não tem nome próprio: é o código + o curso. O banco guarda esse texto em turmas.nome. */
 export const nomeAutomatico = (codigo: string, curso: string) => `${codigo} · ${curso}`;
@@ -50,7 +52,7 @@ export default function Turmas() {
         </div>
         <span className="flex" />
         <button onClick={() => setEditar('nova')} disabled={!cad.cursos.length}
-                title={cad.cursos.length ? '' : 'Cadastre um curso primeiro'}>+ Nova turma</button>
+                className="com-icone" title={cad.cursos.length ? '' : 'Cadastre um curso primeiro'}><Icone nome="mais" tamanho={18} /> Nova turma</button>
       </header>
       <BarraFiltros total={lista.length} rotulo={['turma', 'turmas']}>
         <Busca valor={busca} onChange={setBusca} placeholder="Buscar por código ou curso" />
@@ -103,11 +105,12 @@ function EditarTurma({ turma, onClose }: { turma: Turma | null; onClose: () => v
     const { error } = turma ? await supabase.from('turmas').update(dados).eq('id', turma.id) : await supabase.from('turmas').insert(dados);
     if (error) return setErro(mensagemErro(error));
     await cad.recarregar();
+    avisar(turma ? 'Turma salva.' : 'Turma cadastrada.');
     onClose();
   }
 
   return (
-    <Modal largo={CHAMADA_ATIVA && !!turma} titulo={turma ? (turma.codigo ?? turma.nome) : 'Nova turma'} subtitulo={turma ? curso?.nome : undefined} onClose={onClose}
+    <Modal largo={CHAMADA_ATIVA && !!turma} titulo={turma ? (turma.codigo ?? turma.nome) : 'Nova turma'} subtitulo={turma ? curso?.nome : undefined} onClose={onClose} erro={erro}
            rodape={<><span className="flex" /><button className="secundario" onClick={onClose}>Cancelar</button><button onClick={salvar}>Salvar</button></>}>
       <label className="campo">Curso
         {/* o curso de uma turma existente não muda: as aulas apontam para UCs do curso */}
@@ -133,7 +136,6 @@ function EditarTurma({ turma, onClose }: { turma: Turma | null; onClose: () => v
           </span>
         </div>
       )}
-      {erro && <p className="erro">{erro}</p>}
       {CHAMADA_ATIVA && (turma ? <AlunosTurma turma={turma} />
         : <p className="muted pequeno">Depois de salvar a turma, abra-a de novo para adicionar os alunos.</p>)}
     </Modal>

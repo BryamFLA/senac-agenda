@@ -7,6 +7,8 @@ import { useCadastros } from './Contexto';
 import Modal, { SeletorCor } from './Modal';
 import MiniCalendario from './MiniCalendario';
 import ListaEscolha, { Situacao } from './ListaEscolha';
+import Icone from './Icone';
+import { avisar, confirmar } from './Avisos';
 
 interface Props {
   modo: 'instrutor' | 'turma' | 'local'; // filtro da agenda: fixa o instrutor, a turma ou o local num lançamento novo
@@ -199,13 +201,16 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
     }
     setSalvando(false);
     if (error) return setErro(mensagemErro(error));
+    avisar(editando ? 'Alterações salvas.' : n > 1 ? `${n} datas lançadas na agenda.` : 'Lançado na agenda.');
     onSaved();
   }
 
   async function apagar(serie: boolean) {
     if (!item) return;
-    const pergunta = serie ? 'Apagar este item e os próximos da mesma série?' : 'Apagar este item da agenda?';
-    if (!confirm(pergunta)) return;
+    const ok = await confirmar(serie
+      ? { titulo: 'Apagar esta e as próximas?', texto: 'Este item e os próximos da mesma série saem da agenda. Não dá para desfazer.', acao: 'Apagar série', perigo: true }
+      : { titulo: 'Apagar da agenda?', texto: 'Este item sai da agenda. Não dá para desfazer.', acao: 'Apagar', perigo: true });
+    if (!ok) return;
     setSalvando(true);
     const q = supabase.from('itens').delete();
     const { error } = serie && item.serie_id
@@ -213,6 +218,7 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
       : await q.eq('id', item.id);
     setSalvando(false);
     if (error) return setErro(mensagemErro(error, 'Não foi possível apagar.'));
+    avisar(serie ? 'Série apagada.' : 'Item apagado.');
     onSaved();
   }
 
@@ -226,7 +232,7 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
            titulo={editando ? `${nomeDia(dDia)}, ${ddmm(dDia)}` : 'Lançar na agenda'}
            subtitulo={editando ? (item.origem === 'v0' ? 'Importado da agenda antiga — dá para converter em aula' : 'Editar') :
              fixoInstrutor ? `Agenda de ${instrutor?.nome ?? ''}` : localAgenda ? `Agenda do local ${localAgenda.nome}` : `Agenda da turma ${turma?.nome ?? ''}`}
-           onClose={onClose}
+           onClose={onClose} erro={erro}
            rodape={<>
              {editando && <button className="perigo" onClick={() => apagar(false)} disabled={salvando}>Apagar</button>}
              {editando && item.serie_id && <button className="perigo" onClick={() => apagar(true)} disabled={salvando}>Apagar esta e as próximas</button>}
@@ -368,7 +374,7 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
       )}
       {selecionadasConflito.length > 0 && (
         <div className="alerta conflito">
-          <strong>⚠ Conflito de horário {selecionadasConflito.length === 1 ? 'nesta data' : `em ${selecionadasConflito.length} datas`}:</strong>
+          <strong className="alerta-titulo"><Icone nome="alerta" tamanho={16} /> Conflito de horário {selecionadasConflito.length === 1 ? 'nesta data' : `em ${selecionadasConflito.length} datas`}:</strong>
           <ul>{selecionadasConflito.slice(0, 5).map((m, i) => <li key={i}>{m}</li>)}</ul>
           {selecionadasConflito.length > 5 && <span>e mais {selecionadasConflito.length - 5}…</span>}
           {mudouHorario ? (
@@ -379,7 +385,6 @@ export default function FormItem({ modo, alvoId, data, turno, item, onClose, onS
           ) : <span>Este item já está em conflito. Mude o horário, a data ou a pessoa para resolver.</span>}
         </div>
       )}
-      {erro && <p className="erro">{erro}</p>}
     </Modal>
   );
 }

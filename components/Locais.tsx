@@ -5,6 +5,8 @@ import { Local, mensagemErro } from '@/lib/types';
 import { useCadastros } from './Contexto';
 import Modal from './Modal';
 import { BarraFiltros, Busca, Filtro, SITUACOES, confereSituacao, normal } from './Filtros';
+import Icone from './Icone';
+import { avisar } from './Avisos';
 
 /** Cadastro simples dos locais de aula (salas, laboratórios…). Cada um tem a própria agenda. */
 export default function Locais() {
@@ -24,7 +26,7 @@ export default function Locais() {
           <p className="muted">Salas e laboratórios onde as aulas acontecem. Cada local tem a sua agenda (Agenda → Locais).</p>
         </div>
         <span className="flex" />
-        <button onClick={() => setEditar('novo')}>+ Novo local</button>
+        <button className="com-icone" onClick={() => setEditar('novo')}><Icone nome="mais" tamanho={18} /> Novo local</button>
       </header>
       <BarraFiltros total={lista.length} rotulo={['local', 'locais']}>
         <Busca valor={busca} onChange={setBusca} placeholder="Buscar local" />
@@ -56,18 +58,18 @@ function EditarLocal({ local, onClose }: { local: Local | null; onClose: () => v
     const { error } = local ? await supabase.from('locais').update(dados).eq('id', local.id) : await supabase.from('locais').insert(dados);
     if (error) return setErro(mensagemErro(error));
     await cad.recarregar();
+    avisar(local ? 'Local salvo.' : 'Local cadastrado.');
     onClose();
   }
 
   return (
-    <Modal titulo={local ? local.nome : 'Novo local'} onClose={onClose}
+    <Modal titulo={local ? local.nome : 'Novo local'} onClose={onClose} erro={erro}
            rodape={<><span className="flex" /><button className="secundario" onClick={onClose}>Cancelar</button><button onClick={salvar}>Salvar</button></>}>
       <label className="campo">Nome<input value={f.nome} autoFocus onChange={(e) => setF({ ...f, nome: e.target.value })} placeholder="Ex.: Sala 7" /></label>
       <label className="campo">Ordem nas listas <span className="opcional">(menor aparece primeiro)</span>
         <input type="number" value={f.ordem} onChange={(e) => setF({ ...f, ordem: Number(e.target.value) })} />
       </label>
       <label className="check"><input type="checkbox" checked={f.ativo} onChange={(e) => setF({ ...f, ativo: e.target.checked })} /> Local ativo (inativo some das listas, mas continua nas aulas antigas)</label>
-      {erro && <p className="erro">{erro}</p>}
     </Modal>
   );
 }

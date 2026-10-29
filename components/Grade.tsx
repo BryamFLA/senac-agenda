@@ -1,6 +1,7 @@
 'use client';
 import { Item, TURNOS, Turno } from '@/lib/types';
 import { DIAS, ddmm, hhmm, iso } from '@/lib/datas';
+import Icone from './Icone';
 
 export interface Cartao {
   titulo: string;
@@ -65,7 +66,7 @@ export default function Grade({ semanas, mes, itens, grande, compacto, descrever
               {dias.map((d) => {
                 const lista = porCelula.get(`${iso(d)}|${t.id}`) ?? [];
                 return (
-                  <div key={iso(d)} className={`celula ${d.getMonth() !== mes ? 'fora' : ''} ${onCelula ? 'editavel' : ''}`}>
+                  <div key={iso(d)} className={`celula ${d.getMonth() !== mes ? 'fora' : ''} ${iso(d) === hoje ? 'hoje' : ''} ${onCelula ? 'editavel' : ''}`}>
                     {lista.map((i) => {
                       const c = descrever(i);
                       const extra = horarioDiferente(i);
@@ -74,10 +75,10 @@ export default function Grade({ semanas, mes, itens, grande, compacto, descrever
                              title={c.alerta ? `Conflito de horário: ${c.alerta}` : undefined}>
                           <button type="button" className="cartao-corpo" onClick={() => onItem(i)}
                                   aria-label={`${DIAS[(d.getDay() + 6) % 7]} ${ddmm(d)}, ${t.nome}: ${c.titulo}`}>
-                            <span className="nome">{c.alerta && <span className="selo-conflito" aria-label="Conflito de horário">⚠</span>}{c.titulo}{c.selo && <span className="selo-item">{c.selo}</span>}</span>
+                            <span className="nome">{c.alerta && <span className="selo-conflito" role="img" aria-label="Conflito de horário"><Icone nome="alerta" tamanho={14} /></span>}{c.titulo}{c.selo && <span className="selo-item">{c.selo}</span>}</span>
                             {c.alerta && <span className="sub alerta-txt">{c.alerta}</span>}
                             {c.sub && <span className="sub">{c.sub}</span>}
-                            {c.local && <span className="local-txt">{c.local}</span>}
+                            {c.local && <span className="local-txt"><Icone nome="locais" tamanho={12} />{c.local}</span>}
                             {extra && <span className="hora">{extra}</span>}
                           </button>
                           {acoes && i.tipo === 'aula' && <div className="cartao-acoes">{acoes(i)}</div>}
@@ -88,7 +89,7 @@ export default function Grade({ semanas, mes, itens, grande, compacto, descrever
                       <button type="button" className={`adicionar ${lista.length ? 'mini' : ''}`}
                               onClick={() => onCelula(d, t.id)}
                               aria-label={`Lançar em ${DIAS[(d.getDay() + 6) % 7]} ${ddmm(d)}, ${t.nome}`}>
-                        {lista.length ? '+' : '+ adicionar'}
+                        <Icone nome="mais" tamanho={16} />{!lista.length && <span>adicionar</span>}
                       </button>
                     )}
                   </div>

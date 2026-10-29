@@ -125,9 +125,9 @@ export default function Agenda() {
             </div>
           </div>
           <nav className="mes" aria-label="Mês">
-            <button className="icone" onClick={() => navegar(-1)} aria-label="Mês anterior">‹</button>
+            <button className="icone" onClick={() => navegar(-1)} aria-label="Mês anterior"><Icone nome="voltar" /></button>
             <strong>{MESES[mes]} <span className="ano">{ano}</span></strong>
-            <button className="icone" onClick={() => navegar(1)} aria-label="Próximo mês">›</button>
+            <button className="icone" onClick={() => navegar(1)} aria-label="Próximo mês"><Icone nome="avancar" /></button>
             <button className="secundario" onClick={() => { setAno(hoje.getFullYear()); setMes(hoje.getMonth()); }}>Hoje</button>
           </nav>
         </div>
@@ -149,12 +149,12 @@ export default function Agenda() {
               <span className="muted pequeno">O que você escolher abaixo vai para ela. Clique na outra agenda para trocar.</span>
             </p>
           )}
-          <div className="segmentado" role="tablist" aria-label="Ver agenda por">
-            <button type="button" role="tab" aria-selected={filtroModo === 'instrutor'} className={filtroModo === 'instrutor' ? 'ativo' : ''}
+          <div className="segmentado" role="group" aria-label="Ver agenda por">
+            <button type="button" aria-pressed={filtroModo === 'instrutor'} className={filtroModo === 'instrutor' ? 'ativo' : ''}
                     onClick={() => { setFiltroModo('instrutor'); setBusca(''); }}>{gestor ? 'Instrutores' : 'Minha agenda'}</button>
-            <button type="button" role="tab" aria-selected={filtroModo === 'turma'} className={filtroModo === 'turma' ? 'ativo' : ''}
+            <button type="button" aria-pressed={filtroModo === 'turma'} className={filtroModo === 'turma' ? 'ativo' : ''}
                     onClick={() => { setFiltroModo('turma'); setBusca(''); }}>Turmas</button>
-            <button type="button" role="tab" aria-selected={filtroModo === 'local'} className={filtroModo === 'local' ? 'ativo' : ''}
+            <button type="button" aria-pressed={filtroModo === 'local'} className={filtroModo === 'local' ? 'ativo' : ''}
                     onClick={() => { setFiltroModo('local'); setBusca(''); }}>Locais</button>
           </div>
           {(gestor || filtroModo !== 'instrutor') && (
@@ -170,7 +170,7 @@ export default function Agenda() {
               const oc = contagem.get(x.id) ?? 0;
               const selecionado = paineis[ativo]?.modo === filtroModo && paineis[ativo]?.alvo === x.id;
               return (
-                <li key={x.id}>
+                <li key={x.id} role="none">
                   <button type="button" role="option" aria-selected={selecionado}
                           className={`filtro-item ${selecionado ? 'ativo' : ''} ${oc ? 'com-ocorrencia' : ''}`}
                           onClick={() => escolher(x.id)}
@@ -180,14 +180,14 @@ export default function Agenda() {
                       <span>{x.nome}</span>
                       {x.sub && <small>{x.sub}</small>}
                     </span>
-                    {oc > 0 && <span className="ocorrencia-qtd" aria-label={`${oc} com conflito`}>⚠ {oc}</span>}
+                    {oc > 0 && <span className="ocorrencia-qtd" aria-label={`${oc} com conflito`}><Icone nome="alerta" tamanho={12} />{oc}</span>}
                     {comparando && naAgenda.map((n) => <span key={n} className="coluna-numero mini">{n}</span>)}
                   </button>
                 </li>
               );
             })}
             {!lista.length && (
-              <li className="muted pequeno filtro-vazio">
+              <li role="none" className="muted pequeno filtro-vazio">
                 {busca ? 'Nada encontrado.' : filtroModo === 'instrutor' ? 'Nenhum instrutor cadastrado.'
                   : filtroModo === 'local' ? 'Nenhum local cadastrado.' : 'Nenhuma turma.'}
               </li>
@@ -195,7 +195,7 @@ export default function Agenda() {
           </ul>
           {comOcorrencia > 0 && (
             <p className="filtro-aviso">
-              ⚠ Em vermelho: {comOcorrencia} {filtroModo === 'instrutor' ? 'instrutor(es)' : filtroModo === 'local' ? 'local(is)' : 'turma(s)'} com conflito de horário em {MESES[mes].toLowerCase()}.
+              <Icone nome="alerta" tamanho={14} /> Em vermelho: {comOcorrencia} {filtroModo === 'instrutor' ? 'instrutor(es)' : filtroModo === 'local' ? 'local(is)' : 'turma(s)'} com conflito de horário em {MESES[mes].toLowerCase()}.
             </p>
           )}
         </aside>
@@ -204,7 +204,7 @@ export default function Agenda() {
       {paineis.length < MAX_AGENDAS && (
         <button type="button" className="fab" onClick={adicionar} title="Abrir outra agenda ao lado para comparar"
                 aria-label="Abrir outra agenda ao lado para comparar">
-          <span aria-hidden="true">+</span>
+          <Icone nome="mais" tamanho={28} />
         </button>
       )}
     </div>
